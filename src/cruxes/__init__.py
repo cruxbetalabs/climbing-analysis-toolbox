@@ -9,6 +9,7 @@ from .utils.warp_video import warp_video_with_per_frame_homography
 from .utils.warp_video import warp_video_with_fixed_homography
 from .utils.body_trajectory import extract_pose_and_draw_trajectory
 from .utils.compare_trajectories import extract_pose_and_draw_trajectory_compare
+from .utils.segment_pose import segment_pose_from_video
 
 
 class Cruxes:
@@ -17,8 +18,26 @@ class Cruxes:
         pass
 
     def warp_video(
-        self, ref_img, src_video_path, warp_type="dynamic", overlay_text=False
+        self, ref_img, src_video_path, warp_type="dynamic", overlay_text=False, use_gradient_blending=False, blend_mode='edge_feather', feather_amount=10
     ):
+        """
+        Warp a video to align with a reference image.
+        
+        Args:
+            ref_img: Path to reference image
+            src_video_path: Path to source video
+            warp_type: 'fixed' or 'dynamic' homography
+            overlay_text: Whether to overlay text on frames
+            use_gradient_blending: If True, use advanced blending (deprecated, use blend_mode)
+            blend_mode: Blending mode:
+                        - 'none': Direct masking (fastest, hard edges)
+                        - 'feathered': Full Gaussian alpha blending (may cause shadows)
+                        - 'edge_feather': Distance transform edge blending (recommended, no shadows)
+                        - 'smart': Morphological edge-only blending (very clean)
+                        - 'multiband': Laplacian pyramid blending (high quality, slower)
+                        - 'poisson': Poisson/gradient blending (may make foreground transparent)
+            feather_amount: Pixels to feather at boundary (default: 10, recommended: 5-15)
+        """
         device = "cpu"  # default device, can be set to "mps" for Apple Silicon
         try:
             if torch.backends.mps.is_available():
@@ -81,6 +100,9 @@ class Cruxes:
                 parent_dir,
                 output_video_path,
                 overlay_text=overlay_text,
+                use_gradient_blending=use_gradient_blending,
+                blend_mode=blend_mode,
+                feather_amount=feather_amount,
             )
         else:
             # Option 2: Compute homography for every frame
@@ -91,6 +113,9 @@ class Cruxes:
                 parent_dir,
                 output_video_path,
                 overlay_text=overlay_text,
+                use_gradient_blending=use_gradient_blending,
+                blend_mode=blend_mode,
+                feather_amount=feather_amount,
             )
 
     def body_trajectory(
@@ -106,12 +131,16 @@ class Cruxes:
             # "right_foot",
         ],
         overlay_trajectory=False,
+        hide_original_video=False,
         draw_pose=True,
+        pose_color=(255, 255, 255),  # Color for pose skeleton in BGR format (default: white)
+        show_trajectory=True,
         kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
             True,  # Set this to false if you don't want to apply Kalman filter
             1e0,  # >=1e0 for higher noise, <=1e-1 for lower noise
         ],
         trajectory_png_path=None,
+        savgol_settings=[False, 11, 3],  # [use_savgol, window_length, polyorder]
     ):
         output_prefix = "pose_trajectory"
         # Derive output video path using get_output_path
@@ -122,16 +151,21 @@ class Cruxes:
         )
 
         # (Optional) Derive PNG path with same prefix and .png extension
-        trajectory_png_path = output_video_path.rsplit(".", 1)[0] + ".png"
+        if trajectory_png_path is not None:
+            trajectory_png_path = output_video_path.rsplit(".", 1)[0] + ".png"
 
         extract_pose_and_draw_trajectory(
             target_video_path,
             output_path=output_video_path,
             track_point=track_point,
             overlay_trajectory=overlay_trajectory,
+            hide_original_video=hide_original_video,
             draw_pose=draw_pose,
+            pose_color=pose_color,
+            show_trajectory=show_trajectory,
             kalman_settings=kalman_settings,
             trajectory_png_path=trajectory_png_path,
+            savgol_settings=savgol_settings,
         )
 
     def compare_trajectories(
@@ -177,4 +211,36 @@ class Cruxes:
             video_paths=input_video_paths,
             output_path=output_video_path,
             track_points=track_points,
+        )
+
+    def segment_pose(
+        self,
+        target_video_path,
+        background_color=(0, 255, 0),  # Background color in BGR format (default: green)
+        segmentation_threshold=0.5,  # Threshold for segmentation confidence (0.0 to 1.0)
+    ):
+        """
+        Segment the person from a video and replace the background with a solid color.
+        
+        Args:
+            target_video_path: Path to input video file
+            background_color: Tuple of (B, G, R) values for background (default: green)
+            segmentation_threshold: Confidence threshold for segmentation (default: 0.5)
+        
+        Returns:
+            Path to the output video file
+        """
+        output_prefix = "segmented"
+        # Derive output video path using get_output_path
+        output_video_path = get_output_path(
+            target_video_path,
+            None,
+            output_prefix=output_prefix,
+        )
+
+        return segment_pose_from_video(
+            target_video_path,
+            output_path=output_video_path,
+            background_color=background_color,
+            segmentation_threshold=segmentation_threshold,
         )

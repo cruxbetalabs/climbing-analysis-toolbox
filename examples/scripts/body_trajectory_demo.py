@@ -47,22 +47,32 @@ def main():
     cruxes = Cruxes()
     cruxes.body_trajectory(
         target_video_path,
+        # tracking relevant
         track_point=[
             "hip_mid",
             # "upper_body_center",
             # "head",
             "left_hand",
             "right_hand",
-            # "left_foot",
-            # "right_foot",
+            "left_foot",
+            "right_foot",
         ],
-        overlay_trajectory=False,
         draw_pose=True,
+        pose_color=(0, 255, 0),
+        show_trajectory=False,
+        overlay_trajectory=True,
+        hide_original_video=False,
         kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
             True,  # Set this to false if you don't want to apply Kalman filter
-            1e0,  # >=1e0 for higher noise, <=1e-1 for lower noise
+            0.5e0,  # >=1e0 for higher noise, <=1e-1 for lower noise
         ],
-        trajectory_png_path=None,
+        # Savitzky-Golay filter settings: [use_savgol : bool, window_length : int, polyorder : int]
+        # Window length must be odd and > polyorder
+        savgol_settings=[
+            True,  # Set to True to use Savgol filter instead of Kalman
+            15,  # Window length (must be odd, typical: 5-15)
+            4,  # Polynomial order (typical: 2-4, must be < window_length)
+        ],
     )
 
 

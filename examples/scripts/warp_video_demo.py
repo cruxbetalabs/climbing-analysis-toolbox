@@ -62,7 +62,20 @@ def main():
     print(colored(f"Overlay Text: {overlay_text}", "blue"))
 
     cruxes = Cruxes()
-    cruxes.warp_video(reference_image, target_video, warp_type, overlay_text)
+    # Blending modes to avoid shadowing:
+    # - 'edge_feather': Best for avoiding shadows, only blends at edges (RECOMMENDED)
+    # - 'smart': Clean morphological blending, very minimal shadowing
+    # - 'multiband': High quality pyramid blending, slower but professional results
+    # Lower feather_amount (5-10) = less shadowing, sharper edges
+    # Higher feather_amount (15-30) = more blending, softer but may show shadows
+    cruxes.warp_video(
+        reference_image,
+        target_video,
+        warp_type,
+        overlay_text,
+        blend_mode="none",  # Options: 'none', 'feathered', 'edge_feather', 'smart', 'multiband', 'poisson'
+        feather_amount=40,  # Reduced to minimize shadowing (try 5-15)
+    )
 
 
 if __name__ == "__main__":
