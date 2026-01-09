@@ -89,7 +89,10 @@ from cruxes import Cruxes
 cruxes = Cruxes()
 cruxes.warp_video(
     "warp-dynamic-ref.jpg", 
-    "warp-dynamic-input.mp4", 
+    "warp-dynamic-input.mp4",
+    # Optional: Advanced blending modes
+    blend_mode="edge_feather",  # Options: 'none', 'feathered', 'edge_feather', 'smart', 'multiband', 'poisson'
+    feather_amount=10,  # Pixels to feather at boundary (default: 10)
 )
 ```
 
@@ -145,8 +148,12 @@ There is a couple of settings you can adjust inside the script for `extract_pose
 | - | - |
 | `track_point`  | Points of interest on the estimated pose you want to track. A velocity vector arrow will be drawn to indicate how fast each point is moving with respect to its 3D position |
 | `overlay_trajectory`  | Whether to overlay a half-transparent mask on top of the original video. Note that if this is set to `True`, the velocity vector arrow that corresponds to each track point will be removed. |
+| `hide_original_video`  | Whether to use a black background instead of the original video (useful for creating clean trajectory visualizations) |
 | `draw_pose`  | Whether to draw pose skeleton or not |
+| `pose_color`  | Color for the pose skeleton in BGR format (default: white `(255, 255, 255)`) |
+| `show_trajectory`  | Whether to draw the trajectories (default: `True`) |
 | `kalman_settings`  | Whether to apply Kalman filter to smooth out the trajectory (not the pose itself) |
+| `savgol_settings`  | Whether to apply Savitzky-Golay filter to smooth the pose skeleton: `[use_savgol, window_length, polyorder]` |
 | `trajectory_png_path`  | Whether to generate a `.png` file for the trajectory with black background |
 
 Then, run the command as follows:
@@ -157,7 +164,10 @@ cruxes body-trajectory \
 --video_path "examples/videos/body-trajectory-input.mp4" \
 --overlay_trajectory \
 --draw_pose \
+--show_trajectory \
 --kalman_settings 1e0
+# Additional options:
+# --hide_original_video  # Use black background
 ```
 
 ```python
@@ -177,16 +187,24 @@ cruxes.body_trajectory(
         "right_foot",
     ],
     overlay_trajectory=False,
+    hide_original_video=False,
     draw_pose=True,
+    pose_color=(255, 255, 255),  # White color in BGR
+    show_trajectory=True,
     kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
         True,  # Set this to false if you don't want to apply Kalman filter
         1e0,  # >=1e0 for higher noise, <=1e-1 for lower noise
+    ],
+    savgol_settings=[  # Savitzky-Golay filter: [use_savgol, window_length, polyorder]
+        True,  # Set to True to smooth pose skeleton
+        15,  # Window length (must be odd, typical: 5-15)
+        4,  # Polynomial order (typical: 2-4, must be < window_length)
     ],
     trajectory_png_path=None,
 )
 ```
 
-The generated video will then be located inside of the `output` folder.
+The generated video will be saved in the same directory as your input video with a `pose_trajectory_` prefix.
 
 <details>
     <summary> 🎬 Example Resulting Video </summary>
