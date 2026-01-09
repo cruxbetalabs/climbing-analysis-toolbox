@@ -9,7 +9,6 @@ from .utils.warp_video import warp_video_with_per_frame_homography
 from .utils.warp_video import warp_video_with_fixed_homography
 from .utils.body_trajectory import extract_pose_and_draw_trajectory
 from .utils.compare_trajectories import extract_pose_and_draw_trajectory_compare
-from .utils.segment_pose import segment_pose_from_video
 
 
 class Cruxes:
@@ -211,36 +210,4 @@ class Cruxes:
             video_paths=input_video_paths,
             output_path=output_video_path,
             track_points=track_points,
-        )
-
-    def segment_pose(
-        self,
-        target_video_path,
-        background_color=(0, 255, 0),  # Background color in BGR format (default: green)
-        segmentation_threshold=0.5,  # Threshold for segmentation confidence (0.0 to 1.0)
-    ):
-        """
-        Segment the person from a video and replace the background with a solid color.
-        
-        Args:
-            target_video_path: Path to input video file
-            background_color: Tuple of (B, G, R) values for background (default: green)
-            segmentation_threshold: Confidence threshold for segmentation (default: 0.5)
-        
-        Returns:
-            Path to the output video file
-        """
-        output_prefix = "segmented"
-        # Derive output video path using get_output_path
-        output_video_path = get_output_path(
-            target_video_path,
-            None,
-            output_prefix=output_prefix,
-        )
-
-        return segment_pose_from_video(
-            target_video_path,
-            output_path=output_video_path,
-            background_color=background_color,
-            segmentation_threshold=segmentation_threshold,
         )

@@ -39,13 +39,18 @@ def main():
         "--overlay_trajectory", action="store_true", help="Overlay trajectory mask."
     )
     body_parser.add_argument(
-        "--hide_original_video", action="store_true", help="Use black background instead of original video."
+        "--hide_original_video",
+        action="store_true",
+        help="Use black background instead of original video.",
     )
     body_parser.add_argument(
         "--draw_pose", action="store_true", help="Draw pose skeleton."
     )
     body_parser.add_argument(
-        "--show_trajectory", action="store_true", default=True, help="Draw trajectories."
+        "--show_trajectory",
+        action="store_true",
+        default=True,
+        help="Draw trajectories.",
     )
     body_parser.add_argument(
         "--kalman_settings",
