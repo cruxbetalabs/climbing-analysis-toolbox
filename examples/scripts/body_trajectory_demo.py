@@ -60,7 +60,7 @@ def main():
         draw_pose=True,
         pose_color=(0, 255, 0),
         show_trajectory=False,
-        overlay_trajectory=True,
+        overlay_mask=True,
         hide_original_video=False,
         kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
             True,  # Set this to false if you don't want to apply Kalman filter

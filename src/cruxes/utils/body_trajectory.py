@@ -53,23 +53,31 @@ def extract_pose_and_draw_trajectory(
     video_path,
     output_path=None,  # optional, if not provided, the output video will be saved in the `output` folder
     track_point=["hip_mid"],  # a list of track points to draw trajectory for
-    hide_original_video=False, # if True, the output video will have a black background instead of the original frames
-    overlay_trajectory=False,  # if `True``, we draw trajectory on a semi-transparent black overlay
+    hide_original_video=False,  # if True, the output video will have a black background instead of the original frames
+    overlay_mask=False,  # if `True`, we draw trajectory on a semi-transparent black overlay
+    overlay_trajectory=None,  # deprecated alias
     overlay_opacity=0.8,  # opacity for the overlay, value should between [0.0, 1.0]
     show_gauges=False,  # whether to show gauges and related text
     draw_pose=True,  # whether to draw the body pose skeleton
-    pose_color=(255, 255, 255),  # Color for pose skeleton in BGR format (default: white)
+    pose_color=(
+        255,
+        255,
+        255,
+    ),  # Color for pose skeleton in BGR format (default: white)
     show_trajectory=True,  # whether to draw the trajectories
     kalman_settings=[True, 1e-1],  # [use_kalman, measurement_variance]
     trajectory_png_path=None,  # NEW: optional PNG output path
     savgol_settings=[False, 11, 3],  # [use_savgol, window_length, polyorder]
 ):
     # Suppress MediaPipe warnings
-    os.environ['GLOG_minloglevel'] = '2'
-    
+    os.environ["GLOG_minloglevel"] = "2"
+
+    if overlay_trajectory is not None:
+        overlay_mask = overlay_trajectory
+
     use_kalman = kalman_settings[0]  # whether to use Kalman filter
     measurement_variance = kalman_settings[1]  # variance for the Kalman filter
-    
+
     # use_savgol = savgol_settings[0]  # whether to use Savitzky-Golay filter
     # Always use savgol
 
@@ -131,32 +139,34 @@ def extract_pose_and_draw_trajectory(
     # If using Savgol filter, we need a two-pass approach:
     # Pass 1: Collect all raw landmarks and pose data
     # Pass 2: Apply filter to pose skeleton only (not trajectories) and render video
-    
+
     # First pass: collect all landmarks and store pose landmarks for smoothing
     print("Savgol filter enabled: First pass - collecting landmarks...")
     frames_data = []  # Store frame data for second pass
     all_pose_landmarks = []  # Store all pose landmarks for smoothing
-    
+
     # Get total frame count for progress bar
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
+
     with tqdm(total=total_frames, desc="Collecting landmarks", unit="frame") as pbar:
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
-            
+
             frames_data.append(frame.copy())
             image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = pose.process(image_rgb)
-            
+
             # Store pose landmarks for smoothing
-            all_pose_landmarks.append(results.pose_landmarks if results.pose_landmarks else None)
-            
+            all_pose_landmarks.append(
+                results.pose_landmarks if results.pose_landmarks else None
+            )
+
             if results.pose_landmarks:
                 landmarks = results.pose_landmarks.landmark
                 h, w, _ = frame.shape
-                
+
                 for tp in track_point:
                     confidence_threshold = 0.6
                     result = get_track_point_coords(
@@ -180,14 +190,16 @@ def extract_pose_and_draw_trajectory(
                 for tp in track_point:
                     trajectories[tp].append(None)
                     trajectories_3d[tp].append(None)
-            
+
             # Update progress bar
             pbar.update(1)
-    
+
     # Apply Savgol filter to smooth pose landmarks (for skeleton drawing only)
-    print(f"Applying Savgol filter to pose skeleton (window={savgol_window}, order={savgol_order})...")
+    print(
+        f"Applying Savgol filter to pose skeleton (window={savgol_window}, order={savgol_order})..."
+    )
     smoothed_pose_landmarks = []
-    
+
     # Extract all landmark coordinates for each landmark index (33 landmarks in MediaPipe Pose)
     num_landmarks = 33
     for lm_idx in range(num_landmarks):
@@ -196,53 +208,61 @@ def extract_pose_and_draw_trajectory(
         x_coords = []
         y_coords = []
         z_coords = []
-        
+
         for frame_idx, pose_lm in enumerate(all_pose_landmarks):
             if pose_lm is not None:
                 valid_frames.append(frame_idx)
                 x_coords.append(pose_lm.landmark[lm_idx].x)
                 y_coords.append(pose_lm.landmark[lm_idx].y)
                 z_coords.append(pose_lm.landmark[lm_idx].z)
-        
+
         # Apply Savgol filter if we have enough valid frames
         if len(valid_frames) >= savgol_window:
             x_smooth = savgol_filter(x_coords, savgol_window, savgol_order)
             y_smooth = savgol_filter(y_coords, savgol_window, savgol_order)
             z_smooth = savgol_filter(z_coords, savgol_window, savgol_order)
-            
+
             # Store smoothed coordinates back
             for idx, frame_idx in enumerate(valid_frames):
                 if frame_idx >= len(smoothed_pose_landmarks):
                     # Initialize this frame's landmarks if needed
                     while len(smoothed_pose_landmarks) <= frame_idx:
                         smoothed_pose_landmarks.append({})
-                
+
                 smoothed_pose_landmarks[frame_idx][lm_idx] = {
-                    'x': x_smooth[idx],
-                    'y': y_smooth[idx],
-                    'z': z_smooth[idx],
-                    'visibility': all_pose_landmarks[frame_idx].landmark[lm_idx].visibility
+                    "x": x_smooth[idx],
+                    "y": y_smooth[idx],
+                    "z": z_smooth[idx],
+                    "visibility": all_pose_landmarks[frame_idx]
+                    .landmark[lm_idx]
+                    .visibility,
                 }
-    
+
     # Second pass: render video with raw trajectories and smoothed skeleton
-    print("Second pass - rendering video with raw trajectories and smoothed skeleton...")
+    print(
+        "Second pass - rendering video with raw trajectories and smoothed skeleton..."
+    )
     frame_idx = 0
-    
+
     with tqdm(total=len(frames_data), desc="Rendering video", unit="frame") as pbar:
         for frame in frames_data:
             # Create black background if hide_original_video is True
             if hide_original_video:
                 frame = np.zeros_like(frame)
-        
+
             # Prepare overlay canvas if needed
-            if overlay_trajectory:
+            if overlay_mask and (show_trajectory or show_gauges):
                 if overlay_canvas is None:
                     overlay_canvas = np.zeros_like(frame)
                     overlay_canvas[:] = (0, 0, 0)
-            
+
             # Prepare smoothed pose landmarks for drawing (if available)
             smoothed_landmarks_for_drawing = None
-            if draw_pose and frame_idx < len(smoothed_pose_landmarks) and smoothed_pose_landmarks[frame_idx]:
+            if (
+                draw_pose
+                and frame_idx < len(smoothed_pose_landmarks)
+                and smoothed_pose_landmarks[frame_idx]
+            ):
                 # Get the original landmarks and update with smoothed values
                 if all_pose_landmarks[frame_idx]:
                     smoothed_landmarks_for_drawing = all_pose_landmarks[frame_idx]
@@ -250,34 +270,42 @@ def extract_pose_and_draw_trajectory(
                     for lm_idx in range(num_landmarks):
                         if lm_idx in smoothed_pose_landmarks[frame_idx]:
                             lm_data = smoothed_pose_landmarks[frame_idx][lm_idx]
-                            smoothed_landmarks_for_drawing.landmark[lm_idx].x = lm_data['x']
-                            smoothed_landmarks_for_drawing.landmark[lm_idx].y = lm_data['y']
-                            smoothed_landmarks_for_drawing.landmark[lm_idx].z = lm_data['z']
-            
+                            smoothed_landmarks_for_drawing.landmark[lm_idx].x = lm_data[
+                                "x"
+                            ]
+                            smoothed_landmarks_for_drawing.landmark[lm_idx].y = lm_data[
+                                "y"
+                            ]
+                            smoothed_landmarks_for_drawing.landmark[lm_idx].z = lm_data[
+                                "z"
+                            ]
+
             # Draw trajectories up to current frame (using raw, unsmoothed data)
             for idx, tp in enumerate(track_point):
                 # Get trajectory up to current frame
-                traj = [p for p in trajectories[tp][:frame_idx+1] if p is not None]
-                traj_3d = [p for p in trajectories_3d[tp][:frame_idx+1] if p is not None]
+                traj = [p for p in trajectories[tp][: frame_idx + 1] if p is not None]
+                traj_3d = [
+                    p for p in trajectories_3d[tp][: frame_idx + 1] if p is not None
+                ]
                 color = colors.get(tp, (0, 255, 255))
-                
+
                 # Draw trajectory if enabled
                 if show_trajectory:
-                    if overlay_trajectory:
+                    if overlay_mask:
                         draw_trajectory(overlay_canvas, traj, color, thickness=2)
                     else:
                         draw_trajectory(frame, traj, color, thickness=2)
-                
+
                 # Draw velocity and gauges
                 if len(traj) > 1 and len(traj_3d) > 1:
                     prev_point = traj[-2]
                     curr_point = traj[-1]
                     # Draw velocity arrow only if showing trajectories and not using overlay
-                    if show_trajectory and not overlay_trajectory:
+                    if show_trajectory and not overlay_mask:
                         draw_velocity_arrow(
                             frame, prev_point, curr_point, color, scale=5, thickness=3
                         )
-                    
+
                     prev_3d = traj_3d[-2]
                     curr_3d = traj_3d[-1]
                     velocity_3d = (
@@ -289,10 +317,10 @@ def extract_pose_and_draw_trajectory(
                         velocity_3d[0] ** 2 + velocity_3d[1] ** 2 + velocity_3d[2] ** 2
                     ) ** 0.5
                     abs_velocity *= 1000
-                    
+
                     if abs_velocity > max_observed_velocity[tp]:
                         max_observed_velocity[tp] = abs_velocity
-                    
+
                     if show_gauges:
                         center = gauge_centers[idx]
                         max_velocity = gauge_config.max_velocity
@@ -305,9 +333,11 @@ def extract_pose_and_draw_trajectory(
                             int(255 - 255 * (velocity_clamped / max_velocity)),
                             0,
                         )
-                        gauge_canvas = overlay_canvas if overlay_trajectory else frame
+                        gauge_canvas = overlay_canvas if overlay_mask else frame
                         velocity_text = f"{abs_velocity:.1f} mm/frame"
-                        max_velocity_text = f"Max: {max_observed_velocity[tp]:.1f} mm/frame"
+                        max_velocity_text = (
+                            f"Max: {max_observed_velocity[tp]:.1f} mm/frame"
+                        )
                         draw_gauge(
                             gauge_canvas,
                             center,
@@ -322,14 +352,14 @@ def extract_pose_and_draw_trajectory(
                             max_velocity_text,
                         )
                         draw_label(gauge_canvas, center, gauge_config.radius, tp, color)
-            
-            # Blend overlay if enabled
-            if overlay_trajectory:
+
+            # Blend overlay if enabled and actually used
+            if overlay_mask and overlay_canvas is not None:
                 blended = cv2.addWeighted(
                     frame, 1 - overlay_opacity, overlay_canvas, overlay_opacity, 0
                 )
                 frame = blended
-        
+
             # Draw smoothed pose skeleton on top of everything
             if draw_pose and smoothed_landmarks_for_drawing:
                 mp_drawing.draw_landmarks(
@@ -342,11 +372,11 @@ def extract_pose_and_draw_trajectory(
                     mp_drawing.DrawingSpec(color=pose_color, thickness=2),
                     is_drawing_landmarks=False,
                 )
-            
+
             out.write(frame)
             frame_idx += 1
             pbar.update(1)
-    
+
     cap.release()
     out.release()
     cv2.destroyAllWindows()
