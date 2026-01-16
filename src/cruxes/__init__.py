@@ -17,11 +17,18 @@ class Cruxes:
         pass
 
     def warp_video(
-        self, ref_img, src_video_path, warp_type="dynamic", overlay_text=False, use_gradient_blending=False, blend_mode='edge_feather', feather_amount=10
+        self,
+        ref_img,
+        src_video_path,
+        warp_type="dynamic",
+        overlay_text=False,
+        use_gradient_blending=False,
+        blend_mode="none",
+        feather_amount=10,
     ):
         """
         Warp a video to align with a reference image.
-        
+
         Args:
             ref_img: Path to reference image
             src_video_path: Path to source video
@@ -132,7 +139,11 @@ class Cruxes:
         overlay_trajectory=False,
         hide_original_video=False,
         draw_pose=True,
-        pose_color=(255, 255, 255),  # Color for pose skeleton in BGR format (default: white)
+        pose_color=(
+            255,
+            255,
+            255,
+        ),  # Color for pose skeleton in BGR format (default: white)
         show_trajectory=True,
         kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
             True,  # Set this to false if you don't want to apply Kalman filter
