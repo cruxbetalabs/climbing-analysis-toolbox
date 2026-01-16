@@ -251,7 +251,7 @@ def extract_pose_and_draw_trajectory(
                 frame = np.zeros_like(frame)
 
             # Prepare overlay canvas if needed
-            if overlay_mask and (show_trajectory or show_gauges):
+            if overlay_mask:
                 if overlay_canvas is None:
                     overlay_canvas = np.zeros_like(frame)
                     overlay_canvas[:] = (0, 0, 0)
@@ -353,7 +353,7 @@ def extract_pose_and_draw_trajectory(
                         )
                         draw_label(gauge_canvas, center, gauge_config.radius, tp, color)
 
-            # Blend overlay if enabled and actually used
+            # Blend overlay if enabled
             if overlay_mask and overlay_canvas is not None:
                 blended = cv2.addWeighted(
                     frame, 1 - overlay_opacity, overlay_canvas, overlay_opacity, 0
