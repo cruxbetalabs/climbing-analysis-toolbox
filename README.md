@@ -80,7 +80,7 @@ To warp a video to match a reference scene, we extract the features between two 
 cruxes warp \
 --ref_img "examples/videos/warp-dynamic-ref.jpg" \
 --src_video_path "examples/videos/warp-dynamic-input.mp4"
-# by default the type of warping is `dynamic`
+# by default the type of warping is `dynamic`: `--type dynamic`
 ```
 
 ```python
