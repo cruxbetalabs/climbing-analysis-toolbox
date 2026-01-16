@@ -568,22 +568,30 @@ def warp_video_with_fixed_homography(
     if not ret_first:
         print("Error: Could not read the first frame from video.")
         return
-    # if parent_dir is empty, use current directory
-    if not parent_dir:
-        parent_dir = os.getcwd()
-    temp_first_frame_path = f"{parent_dir}/_temp_first_frame.jpg"
-    cv2.imwrite(temp_first_frame_path, first_frame)
-    cap_first.release()
 
-    # Compute homography once using the first frame as target image
-    H, img_reference, img_target = compute_homography_once(
-        img_reference_path, temp_first_frame_path, matcher
+    # Create a unique temporary file for the first frame
+    temp_fd, temp_first_frame_path = tempfile.mkstemp(
+        suffix=".jpg", prefix="first_frame_"
     )
-    if H is not None:
-        H_inv = invert_homography(H)
-    else:
-        print("Homography matrix is None. Cannot warp the video.")
-        return
+    os.close(temp_fd)  # Close the file descriptor, we just need the path
+
+    try:
+        cv2.imwrite(temp_first_frame_path, first_frame)
+        cap_first.release()
+
+        # Compute homography once using the first frame as target image
+        H, img_reference, img_target = compute_homography_once(
+            img_reference_path, temp_first_frame_path, matcher
+        )
+        if H is not None:
+            H_inv = invert_homography(H)
+        else:
+            print("Homography matrix is None. Cannot warp the video.")
+            return
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(temp_first_frame_path):
+            os.remove(temp_first_frame_path)
 
     # Ensure img_reference is in BGR for consistency with OpenCV
     R_prime_bgr = tensor_to_np(img_reference)
