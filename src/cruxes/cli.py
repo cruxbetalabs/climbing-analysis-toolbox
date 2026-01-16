@@ -36,7 +36,16 @@ def main():
         help="Comma-separated points of interest to track. Available: hip_mid, upper_body_center, head, left_hand, right_hand, left_foot, right_foot",
     )
     body_parser.add_argument(
-        "--overlay_trajectory", action="store_true", help="Overlay trajectory mask."
+        "--overlay_mask",
+        dest="overlay_mask",
+        action="store_true",
+        help="Overlay a semi-transparent mask for trajectories/gauges.",
+    )
+    body_parser.add_argument(
+        "--overlay_trajectory",
+        dest="overlay_mask",
+        action="store_true",
+        help=argparse.SUPPRESS,
     )
     body_parser.add_argument(
         "--hide_original_video",
@@ -80,9 +89,9 @@ def main():
         cruxes.body_trajectory(
             args.video_path,
             track_point=track_points,
-            overlay_trajectory=args.overlay_trajectory,
             hide_original_video=args.hide_original_video,
             draw_pose=args.draw_pose,
+            overlay_mask=args.overlay_mask,
             show_trajectory=args.show_trajectory,
             kalman_settings=kalman_settings,
             trajectory_png_path=args.trajectory_png_path,

@@ -136,7 +136,8 @@ class Cruxes:
             # "left_foot",
             # "right_foot",
         ],
-        overlay_trajectory=False,
+        overlay_mask=False,
+        overlay_trajectory=None,  # deprecated alias
         hide_original_video=False,
         draw_pose=True,
         pose_color=(
@@ -152,6 +153,9 @@ class Cruxes:
         trajectory_png_path=None,
         savgol_settings=[False, 11, 3],  # [use_savgol, window_length, polyorder]
     ):
+        if overlay_trajectory is not None:
+            overlay_mask = overlay_trajectory
+
         output_prefix = "pose_trajectory"
         # Derive output video path using get_output_path
         output_video_path = get_output_path(
@@ -168,7 +172,7 @@ class Cruxes:
             target_video_path,
             output_path=output_video_path,
             track_point=track_point,
-            overlay_trajectory=overlay_trajectory,
+            overlay_mask=overlay_mask,
             hide_original_video=hide_original_video,
             draw_pose=draw_pose,
             pose_color=pose_color,

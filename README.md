@@ -147,7 +147,7 @@ There is a couple of settings you can adjust inside the script for `extract_pose
 | Argument | Description | 
 | - | - |
 | `track_point`  | Points of interest on the estimated pose you want to track. A velocity vector arrow will be drawn to indicate how fast each point is moving with respect to its 3D position |
-| `overlay_trajectory`  | Whether to overlay a half-transparent mask on top of the original video. Note that if this is set to `True`, the velocity vector arrow that corresponds to each track point will be removed. |
+| `overlay_mask`  | Whether to overlay a half-transparent mask on top of the original video. Note that if this is set to `True`, the velocity vector arrow that corresponds to each track point will be removed. |
 | `hide_original_video`  | Whether to use a black background instead of the original video (useful for creating clean trajectory visualizations) |
 | `draw_pose`  | Whether to draw pose skeleton or not |
 | `pose_color`  | Color for the pose skeleton in BGR format (default: white `(255, 255, 255)`) |
@@ -162,7 +162,7 @@ Then, run the command as follows:
 # CLI usage
 cruxes body-trajectory \
 --video_path "examples/videos/body-trajectory-input.mp4" \
---overlay_trajectory \
+--overlay_mask \
 --draw_pose \
 --show_trajectory \
 --kalman_settings 1e0
@@ -186,7 +186,7 @@ cruxes.body_trajectory(
         "left_foot",
         "right_foot",
     ],
-    overlay_trajectory=False,
+    overlay_mask=False,
     hide_original_video=False,
     draw_pose=True,
     pose_color=(255, 255, 255),  # White color in BGR
