@@ -33,7 +33,7 @@ def main():
         "--track_point",
         type=str,
         default="hip_mid,left_hand,right_hand",
-        help="Comma-separated points of interest to track \n(currently available: hip_mid,upper_body_center,head,left_hand,right_hand,left_foot,right_foot)",
+        help="Comma-separated points of interest to track. Available: hip_mid, upper_body_center, head, left_hand, right_hand, left_foot, right_foot",
     )
     body_parser.add_argument(
         "--overlay_trajectory", action="store_true", help="Overlay trajectory mask."
@@ -49,7 +49,7 @@ def main():
     body_parser.add_argument(
         "--show_trajectory",
         action="store_true",
-        default=True,
+        default=False,
         help="Draw trajectories.",
     )
     body_parser.add_argument(
