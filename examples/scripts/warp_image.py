@@ -6,8 +6,7 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
 )
 
-from termcolor import colored
-from matching import get_matcher
+from imm import get_matcher
 from cruxes.utils.warp_video import warp_image_to_reference
 
 
@@ -16,7 +15,7 @@ def main():
     matcher = get_matcher(
         # Available models:
         # https://github.com/alexstoken/image-matching-models?tab=readme-ov-file#available-models
-        "superpoint-lg",  # "superglue",  # "d2-net", "r2d2"
+        "superpoint-lightglue",  # "superglue",  # "d2-net", "r2d2"
         device="mps",
     )
 
