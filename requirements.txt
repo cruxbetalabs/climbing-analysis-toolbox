@@ -3,3 +3,6 @@ opencv-python>=4.11.0.86
 numpy>=1.26.4
 mediapipe>=0.10.20
 scipy>=1.11.0
+torch>=2.8.0
+torchvision>=0.23.0
+image-matching-models==1.1.0
