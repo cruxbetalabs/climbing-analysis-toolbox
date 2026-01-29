@@ -60,7 +60,7 @@ class Cruxes:
         matcher = get_matcher(
             # Available models:
             # https://github.com/alexstoken/image-matching-models?tab=readme-ov-file#available-models
-            "superpoint-lg",  # "superglue",  # "d2-net", "r2d2"
+            "superpoint-lightglue",  # "superglue",  # "d2-net", "r2d2"
             device=device,
         )
 

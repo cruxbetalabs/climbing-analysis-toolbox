@@ -72,7 +72,7 @@ def main():
     # Initialize the matcher
     print(colored("Initializing feature matcher...", "yellow"))
     matcher = get_matcher(
-        "superpoint-lg",  # You can change this to other models like "superglue", "d2-net", "r2d2"
+        "superpoint-lightglue",  # You can change this to other models like "superglue", "d2-net", "r2d2"
         device=device,
     )
 
