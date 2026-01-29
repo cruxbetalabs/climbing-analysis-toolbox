@@ -17,13 +17,14 @@ source PATH_TO_YOUR_VENV
 ### Prerequisites
 
 ```shell
-# The following third-party dependency is needed for video warping (or scene matching)
-python -m pip install git+https://github.com/alexstoken/image-matching-models.git
-```
-
-```shell
 python -m pip install --upgrade cruxes # Install the latest version of this toolbox
 # https://pypi.org/project/cruxes/
+```
+
+Video warping (scene matching) requires an extra dependency that can’t be bundled on PyPI. Install it manually if you plan to use the warping features:
+
+```shell
+python -m pip install git+https://github.com/alexstoken/image-matching-models.git
 ```
 
 Only proceed to the following content once you have installed the dependencies correctly.
