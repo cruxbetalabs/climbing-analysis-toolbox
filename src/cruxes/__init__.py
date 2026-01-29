@@ -2,7 +2,7 @@ from termcolor import colored
 import os
 import torch
 
-from matching import get_matcher
+from imm import get_matcher
 
 from .utils.file_operations import get_output_path
 from .utils.warp_video import warp_video_with_per_frame_homography

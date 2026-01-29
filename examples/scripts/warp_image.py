@@ -6,8 +6,7 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
 )
 
-from termcolor import colored
-from matching import get_matcher
+from imm import get_matcher
 from cruxes.utils.warp_video import warp_image_to_reference
 
 
