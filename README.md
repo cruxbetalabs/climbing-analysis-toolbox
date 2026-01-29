@@ -21,14 +21,6 @@ python -m pip install --upgrade cruxes # Install the latest version of this tool
 # https://pypi.org/project/cruxes/
 ```
 
-Video warping (scene matching) requires an extra dependency that can’t be bundled on PyPI. Install it manually if you plan to use the warping features:
-
-```shell
-python -m pip install git+https://github.com/alexstoken/image-matching-models.git
-```
-
-Only proceed to the following content once you have installed the dependencies correctly.
-
 ## Catalogue
 
 > For each section, there will be detailed example code for both CLI usage and in-code usage.
