@@ -1,4 +1,4 @@
-import mediapipe as mp
+from .pose_backend import PoseLandmark
 
 
 def get_track_point_coords(tp, landmarks, w, h, confidence_threshold=0.6):
@@ -6,16 +6,15 @@ def get_track_point_coords(tp, landmarks, w, h, confidence_threshold=0.6):
     Map a track point name to its 2D and 3D coordinates using MediaPipe landmarks.
     Returns (mid_point, mid_point_3d) or None if confidence is too low or invalid tp.
     """
-    mp_pose = mp.solutions.pose
-    left_hip = landmarks[mp_pose.PoseLandmark.LEFT_HIP]
-    right_hip = landmarks[mp_pose.PoseLandmark.RIGHT_HIP]
-    left_shoulder = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER]
-    right_shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER]
-    nose = landmarks[mp_pose.PoseLandmark.NOSE]
-    left_hand = landmarks[mp_pose.PoseLandmark.LEFT_WRIST]
-    right_hand = landmarks[mp_pose.PoseLandmark.RIGHT_WRIST]
-    left_foot = landmarks[mp_pose.PoseLandmark.LEFT_ANKLE]
-    right_foot = landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE]
+    left_hip = landmarks[PoseLandmark.LEFT_HIP]
+    right_hip = landmarks[PoseLandmark.RIGHT_HIP]
+    left_shoulder = landmarks[PoseLandmark.LEFT_SHOULDER]
+    right_shoulder = landmarks[PoseLandmark.RIGHT_SHOULDER]
+    nose = landmarks[PoseLandmark.NOSE]
+    left_hand = landmarks[PoseLandmark.LEFT_WRIST]
+    right_hand = landmarks[PoseLandmark.RIGHT_WRIST]
+    left_foot = landmarks[PoseLandmark.LEFT_ANKLE]
+    right_foot = landmarks[PoseLandmark.RIGHT_ANKLE]
 
     if tp == "hip_mid":
         if (

@@ -19,15 +19,9 @@ def main():
         device="mps",
     )
 
-    reference_image = (
-        "/Users/tommyjtl/Documents/Projects/climbing/climbs/v6-spray-dec-2-2025/1.jpg"
-    )
-    target_image_path = (
-        "/Users/tommyjtl/Documents/Projects/climbing/climbs/v6-spray-dec-2-2025/2.jpg"
-    )
-    output_image_path = (
-        "/Users/tommyjtl/Documents/Projects/climbing/climbs/v6-spray-dec-2-2025/out.jpg"
-    )
+    reference_image = "/Users/tommyjtl/Documents/Crux Beta Labs LLC/projects/spray/public/temporary_static_assets/example-problems/benchmark-bkl/iusjdnf.jpg"
+    target_image_path = "/Users/tommyjtl/Documents/Crux Beta Labs LLC/projects/spray/public/temporary_static_assets/example-problems/benchmark-bkl/3.png"
+    output_image_path = "/Users/tommyjtl/Documents/Crux Beta Labs LLC/projects/spray/public/temporary_static_assets/example-problems/benchmark-bkl/out1.png"
 
     warp_image_to_reference(
         reference_image,

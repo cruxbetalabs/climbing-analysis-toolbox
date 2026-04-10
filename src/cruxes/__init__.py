@@ -1,8 +1,5 @@
 from termcolor import colored
 import os
-import torch
-
-from imm import get_matcher
 
 from .utils.file_operations import get_output_path
 from .utils.warp_video import warp_video_with_per_frame_homography
@@ -44,6 +41,9 @@ class Cruxes:
                         - 'poisson': Poisson/gradient blending (may make foreground transparent)
             feather_amount: Pixels to feather at boundary (default: 10, recommended: 5-15)
         """
+        import torch
+        from imm import get_matcher
+
         device = "cpu"  # default device, can be set to "mps" for Apple Silicon
         try:
             if torch.backends.mps.is_available():
