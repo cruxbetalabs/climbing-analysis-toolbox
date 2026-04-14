@@ -7,162 +7,65 @@ def draw_trajectory(canvas, traj, color, thickness=2):
         cv2.line(canvas, traj[i - 1], traj[i], color, thickness)
 
 
+def draw_colored_trajectory(canvas, traj, segment_colors, thickness=2):
+    for idx in range(1, len(traj)):
+        color = segment_colors[idx - 1]
+        cv2.line(canvas, traj[idx - 1], traj[idx], color, thickness)
+
+
 def draw_velocity_arrow(canvas, prev_point, curr_point, color, scale=5, thickness=3):
     dx = curr_point[0] - prev_point[0]
     dy = curr_point[1] - prev_point[1]
+    direction_norm = np.hypot(dx, dy)
+    if direction_norm == 0:
+        return
+
+    arrow_length = scale
+    direction_x = dx / direction_norm
+    direction_y = dy / direction_norm
     end_point = (
-        curr_point[0] + int(dx * scale),
-        curr_point[1] + int(dy * scale),
+        curr_point[0] + int(direction_x * arrow_length),
+        curr_point[1] + int(direction_y * arrow_length),
     )
     cv2.arrowedLine(canvas, curr_point, end_point, color, thickness, tipLength=0.3)
 
 
-# Gauge configuration dataclass
-class GaugeConfig:
-    def __init__(
-        self,
-        radius=60,
-        thickness=15,
-        spacing=120,
-        max_velocity=50,
-        top=120,
-        left_start=120,
-    ):
-        self.radius = radius
-        self.thickness = thickness
-        self.spacing = spacing
-        self.max_velocity = max_velocity
-        self.top = top
-        self.left_start = left_start
+def draw_telemetry_panel(canvas, telemetry_rows, origin=(20, 20)):
+    if not telemetry_rows:
+        return
 
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.55
+    text_thickness = 1
+    line_height = 24
+    header = "joint | raw_v | vel_ratio"
+    padding_x = 10
+    padding_y = 10
 
-def get_gauge_centers(track_point, config: GaugeConfig):
-    return [
-        (
-            config.left_start + i * (2 * config.radius + config.spacing),
-            config.top,
+    rendered_rows = [header] + telemetry_rows
+    text_width = max(
+        cv2.getTextSize(row, font, font_scale, text_thickness)[0][0]
+        for row in rendered_rows
+    )
+    panel_width = text_width + padding_x * 2
+    panel_height = padding_y * 2 + line_height * len(rendered_rows)
+    x0, y0 = origin
+    x1 = x0 + panel_width
+    y1 = y0 + panel_height
+
+    cv2.rectangle(canvas, (x0, y0), (x1, y1), (15, 15, 15), -1)
+    cv2.rectangle(canvas, (x0, y0), (x1, y1), (230, 230, 230), 1)
+
+    for row_idx, row in enumerate(rendered_rows):
+        text_y = y0 + padding_y + (row_idx + 1) * line_height - 6
+        color = (230, 230, 230) if row_idx == 0 else (245, 245, 245)
+        cv2.putText(
+            canvas,
+            row,
+            (x0 + padding_x, text_y),
+            font,
+            font_scale,
+            color,
+            text_thickness,
+            cv2.LINE_AA,
         )
-        for i in range(len(track_point))
-    ]
-
-
-def draw_gauge(
-    canvas,
-    center,
-    gauge_radius,
-    gauge_thickness,
-    start_angle,
-    end_angle,
-    gauge_color,
-    max_velocity,
-    abs_velocity,
-    velocity_text,
-    max_velocity_text,
-):
-    # Draw background arc (gray)
-    cv2.ellipse(
-        canvas,
-        center,
-        (gauge_radius, gauge_radius),
-        0,
-        start_angle,
-        start_angle + 270,
-        (220, 220, 220),
-        gauge_thickness,
-    )
-    # Draw value arc
-    cv2.ellipse(
-        canvas,
-        center,
-        (gauge_radius, gauge_radius),
-        0,
-        start_angle,
-        end_angle,
-        gauge_color,
-        gauge_thickness,
-    )
-    # Draw center circle
-    cv2.circle(
-        canvas,
-        center,
-        gauge_radius - gauge_thickness,
-        (255, 255, 255),
-        -1,
-    )
-    # Draw pointer
-    pointer_angle_rad = np.deg2rad(end_angle)
-    pointer_length = gauge_radius - gauge_thickness // 2
-    pointer_x = int(center[0] + pointer_length * np.cos(pointer_angle_rad))
-    pointer_y = int(center[1] + pointer_length * np.sin(pointer_angle_rad))
-    cv2.line(canvas, center, (pointer_x, pointer_y), gauge_color, 3)
-    # Draw velocity value below the gauge
-    text_size = cv2.getTextSize(velocity_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
-    text_x = center[0] - text_size[0] // 2
-    text_y = center[1] + gauge_radius + 30
-    text_bg_x0 = text_x - 5
-    text_bg_y0 = text_y - text_size[1] - 5
-    text_bg_x1 = text_x + text_size[0] + 5
-    text_bg_y1 = text_y + 5
-    cv2.rectangle(
-        canvas, (text_bg_x0, text_bg_y0), (text_bg_x1, text_bg_y1), (245, 245, 245), -1
-    )
-    cv2.putText(
-        canvas,
-        velocity_text,
-        (text_x, text_y),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        (40, 40, 40),
-        2,
-        cv2.LINE_AA,
-    )
-    # Draw max velocity value below the current velocity
-    max_text_size = cv2.getTextSize(
-        max_velocity_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
-    )[0]
-    max_text_x = center[0] - max_text_size[0] // 2
-    max_text_y = text_y + text_size[1] + 10
-    max_text_bg_x0 = max_text_x - 5
-    max_text_bg_y0 = max_text_y - max_text_size[1] - 5
-    max_text_bg_x1 = max_text_x + max_text_size[0] + 5
-    max_text_bg_y1 = max_text_y + 5
-    cv2.rectangle(
-        canvas,
-        (max_text_bg_x0, max_text_bg_y0),
-        (max_text_bg_x1, max_text_bg_y1),
-        (245, 245, 245),
-        -1,
-    )
-    cv2.putText(
-        canvas,
-        max_velocity_text,
-        (max_text_x, max_text_y),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        (40, 40, 40),
-        2,
-        cv2.LINE_AA,
-    )
-
-
-def draw_label(canvas, center, gauge_radius, label_text, color):
-    label_size = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
-    label_x = center[0] - label_size[0] // 2
-    label_y = center[1] - gauge_radius - 25
-    label_bg_x0 = label_x - 5
-    label_bg_y0 = label_y - label_size[1] - 5
-    label_bg_x1 = label_x + label_size[0] + 5
-    label_bg_y1 = label_y + 5
-    cv2.rectangle(
-        canvas, (label_bg_x0, label_bg_y0), (label_bg_x1, label_bg_y1), (0, 0, 0), -1
-    )
-    cv2.putText(
-        canvas,
-        label_text,
-        (label_x, label_y),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.7,
-        color,
-        2,
-        cv2.LINE_AA,
-    )

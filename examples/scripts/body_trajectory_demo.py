@@ -50,17 +50,25 @@ def main():
         # tracking relevant
         track_point=[
             "hip_mid",
-            # "upper_body_center",
+            "upper_body_center",
             # "head",
-            "left_hand",
-            "right_hand",
+            # "left_hand",
+            # "right_hand",
             "left_foot",
             "right_foot",
         ],
+        # trajectory_only=True,
+        #
         draw_pose=True,
-        pose_color=(0, 255, 0),
-        show_trajectory=False,
-        overlay_mask=True,
+        pose_color=(255, 255, 255),
+        show_trajectory=True,
+        show_gauges=True,
+        trajectory_history_seconds=0.5,
+        use_cached_landmarks=True,
+        use_cached_trajectory_metadata=True,
+        export_landmarks=True,
+        export_metadata=True,
+        overlay_mask=False,
         hide_original_video=False,
         kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
             True,  # Set this to false if you don't want to apply Kalman filter
@@ -69,7 +77,7 @@ def main():
         # Savitzky-Golay filter settings: [use_savgol : bool, window_length : int, polyorder : int]
         # Window length must be odd and > polyorder
         savgol_settings=[
-            True,  # Set to True to use Savgol filter instead of Kalman
+            True,  # Set to True to smooth the pose skeleton after pose estimation
             15,  # Window length (must be odd, typical: 5-15)
             4,  # Polynomial order (typical: 2-4, must be < window_length)
         ],

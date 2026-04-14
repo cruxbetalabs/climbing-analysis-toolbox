@@ -1,0 +1,11 @@
+repos:
+  - repo: local
+    hooks:
+      - id: version-ahead-of-remote
+        name: Ensure package version is ahead of remote
+        entry: python scripts/check_version_ahead.py
+        language: python
+        additional_dependencies:
+          - packaging>=24.0
+        pass_filenames: false
+        files: ^(pyproject\.toml|setup\.py|src/)

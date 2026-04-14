@@ -136,6 +136,7 @@ class Cruxes:
             # "left_foot",
             # "right_foot",
         ],
+        trajectory_only=False,
         overlay_mask=False,
         overlay_trajectory=None,  # deprecated alias
         hide_original_video=False,
@@ -145,7 +146,17 @@ class Cruxes:
             255,
             255,
         ),  # Color for pose skeleton in BGR format (default: white)
+        show_gauges=False,
         show_trajectory=True,
+        trajectory_history_seconds=None,
+        use_cached_landmarks=False,
+        export_landmarks=False,
+        landmarks_json_path=None,
+        use_cached_trajectory_metadata=False,
+        export_metadata=False,
+        metadata_path=None,
+        export_trajectory_metadata=None,
+        trajectory_metadata_path=None,
         kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
             True,  # Set this to false if you don't want to apply Kalman filter
             1e0,  # >=1e0 for higher noise, <=1e-1 for lower noise
@@ -156,6 +167,11 @@ class Cruxes:
         if overlay_trajectory is not None:
             overlay_mask = overlay_trajectory
 
+        if export_trajectory_metadata is not None:
+            export_metadata = export_metadata or export_trajectory_metadata
+        if metadata_path is None and trajectory_metadata_path is not None:
+            metadata_path = trajectory_metadata_path
+
         output_prefix = "pose_trajectory"
         # Derive output video path using get_output_path
         output_video_path = get_output_path(
@@ -164,19 +180,26 @@ class Cruxes:
             output_prefix=output_prefix,
         )
 
-        # (Optional) Derive PNG path with same prefix and .png extension
-        if trajectory_png_path is not None:
-            trajectory_png_path = output_video_path.rsplit(".", 1)[0] + ".png"
-
         extract_pose_and_draw_trajectory(
             target_video_path,
             output_path=output_video_path,
             track_point=track_point,
+            trajectory_only=trajectory_only,
             overlay_mask=overlay_mask,
             hide_original_video=hide_original_video,
             draw_pose=draw_pose,
             pose_color=pose_color,
+            show_gauges=show_gauges,
             show_trajectory=show_trajectory,
+            trajectory_history_seconds=trajectory_history_seconds,
+            use_cached_landmarks=use_cached_landmarks,
+            export_landmarks=export_landmarks,
+            landmarks_json_path=landmarks_json_path,
+            use_cached_trajectory_metadata=use_cached_trajectory_metadata,
+            export_metadata=export_metadata,
+            metadata_path=metadata_path,
+            export_trajectory_metadata=export_trajectory_metadata,
+            trajectory_metadata_path=trajectory_metadata_path,
             kalman_settings=kalman_settings,
             trajectory_png_path=trajectory_png_path,
             savgol_settings=savgol_settings,

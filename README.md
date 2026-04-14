@@ -9,17 +9,21 @@ A set of computer vision tools for processing and analyzing your climbing videos
 ## Getting Started
 
 ```shell
-# Create an virtual environment
-python -m venv PATH_TO_YOUR_VENV
-source PATH_TO_YOUR_VENV
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# Install or upgrade the published PyPI package
+python -m pip install --upgrade pip
+python -m pip install --upgrade cruxes
+
+# Confirm the CLI is available
+cruxes --help
 ```
 
-### Prerequisites
+The published package name is `cruxes`, and it installs the `cruxes` CLI.
 
-```shell
-python -m pip install --upgrade cruxes # Install the latest version of this toolbox
-# https://pypi.org/project/cruxes/
-```
+PyPI: https://pypi.org/project/cruxes/
 
 ## Catalogue
 
@@ -39,7 +43,8 @@ cruxes warp \
 
 ```shell
 cruxes body-trajectory \
---video_path "examples/videos/body-trajectory-input.mp4"
+--video_path "examples/videos/body-trajectory-input.mp4" \
+--show_trajectory
 # [other options]
 ```
 
@@ -140,14 +145,27 @@ There is a couple of settings you can adjust inside the script for `extract_pose
 | Argument | Description | 
 | - | - |
 | `track_point`  | Points of interest on the estimated pose you want to track. A velocity vector arrow will be drawn to indicate how fast each point is moving with respect to its 3D position |
-| `overlay_mask`  | Whether to overlay a half-transparent mask on top of the original video. Note that if this is set to `True`, the velocity vector arrow that corresponds to each track point will be removed. |
+| `trajectory_only`  | Render only the trajectory on a black background. This disables pose drawing and telemetry, forces trajectory drawing on, and prefers cached trajectory metadata if available |
+| `overlay_mask`  | Whether to overlay a half-transparent mask on top of the original video. |
 | `hide_original_video`  | Whether to use a black background instead of the original video (useful for creating clean trajectory visualizations) |
 | `draw_pose`  | Whether to draw pose skeleton or not |
 | `pose_color`  | Color for the pose skeleton in BGR format (default: white `(255, 255, 255)`) |
 | `show_trajectory`  | Whether to draw the trajectories (default: `True`) |
+| `show_gauges`  | Whether to show a top-left telemetry panel with `raw_v` and `vel_ratio` for each tracked joint |
+| `trajectory_history_seconds`  | If set, only the last `N` seconds of each joint trajectory are shown; if omitted, the full path is shown |
+| `use_cached_landmarks`  | Whether to reuse a matching landmarks JSON cache instead of recomputing pose landmarks |
+| `export_landmarks`  | Whether to save the collected pose landmarks to JSON after detection |
+| `landmarks_json_path`  | Optional cache file path. Defaults to `<video_stem>_landmarks.json` next to the input video |
+| `use_cached_trajectory_metadata`  | Whether to reuse a matching trajectory metadata JSON file as the trajectory source. This does not force drawing on by itself; `show_trajectory` still controls rendering |
+| `export_metadata`  | Whether to export unified frontend-facing metadata JSON, including per-sample displacement and per-second velocity vectors, per-frame pose landmarks, and explicit skeleton connections when pose data is available |
+| `metadata_path`  | Optional output path for the metadata JSON. Defaults to `<video_stem>_trajectory_metadata.json` next to the input video |
 | `kalman_settings`  | Whether to apply Kalman filter to smooth out the trajectory (not the pose itself) |
 | `savgol_settings`  | Whether to apply Savitzky-Golay filter to smooth the pose skeleton: `[use_savgol, window_length, polyorder]` |
-| `trajectory_png_path`  | Whether to generate a `.png` file for the trajectory with black background |
+| `trajectory_png_path`  | Optional output path for a `.png` export of the trajectory on a black background |
+
+For CLI usage, `--show_trajectory` is required in the normal overlay mode. If you use `--trajectory_only`, trajectory drawing is enabled automatically.
+
+`--savgol_settings` is currently available in the Python API example below, not in the CLI.
 
 Then, run the command as follows:
 
@@ -155,12 +173,21 @@ Then, run the command as follows:
 # CLI usage
 cruxes body-trajectory \
 --video_path "examples/videos/body-trajectory-input.mp4" \
+--trajectory_only \
 --overlay_mask \
 --draw_pose \
 --show_trajectory \
+--show_gauges \
+--trajectory_history_seconds 2 \
+--use_cached_landmarks \
+--use_cached_trajectory_metadata \
+--export_landmarks \
+--export_metadata \
 --kalman_settings 1e0
 # Additional options:
 # --hide_original_video  # Use black background
+# --metadata_path ./my_metadata.json
+# In trajectory_only mode, pose drawing and telemetry are disabled automatically.
 ```
 
 ```python
@@ -179,11 +206,18 @@ cruxes.body_trajectory(
         "left_foot",
         "right_foot",
     ],
+    trajectory_only=False,  # Set True for black-background trajectory-only output
     overlay_mask=False,
     hide_original_video=False,
     draw_pose=True,
     pose_color=(255, 255, 255),  # White color in BGR
+    show_gauges=True,  # Show top-left telemetry for each tracked joint
     show_trajectory=True,
+    trajectory_history_seconds=2.0,  # Show only the last 2 seconds; omit for full history
+    use_cached_landmarks=True,  # Reuse a matching landmarks cache if present
+    use_cached_trajectory_metadata=True,  # Reuse trajectory metadata for trajectory rendering if present
+    export_landmarks=True,  # Save computed landmarks for later experimentation
+    export_metadata=True,  # Export unified frontend-facing metadata JSON
     kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
         True,  # Set this to false if you don't want to apply Kalman filter
         1e0,  # >=1e0 for higher noise, <=1e-1 for lower noise
