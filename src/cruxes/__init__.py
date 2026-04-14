@@ -180,10 +180,6 @@ class Cruxes:
             output_prefix=output_prefix,
         )
 
-        # (Optional) Derive PNG path with same prefix and .png extension
-        if trajectory_png_path is not None:
-            trajectory_png_path = output_video_path.rsplit(".", 1)[0] + ".png"
-
         extract_pose_and_draw_trajectory(
             target_video_path,
             output_path=output_video_path,

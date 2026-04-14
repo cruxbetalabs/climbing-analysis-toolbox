@@ -9,17 +9,21 @@ A set of computer vision tools for processing and analyzing your climbing videos
 ## Getting Started
 
 ```shell
-# Create an virtual environment
-python -m venv PATH_TO_YOUR_VENV
-source PATH_TO_YOUR_VENV
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# Install or upgrade the published PyPI package
+python -m pip install --upgrade pip
+python -m pip install --upgrade cruxes
+
+# Confirm the CLI is available
+cruxes --help
 ```
 
-### Prerequisites
+The published package name is `cruxes`, and it installs the `cruxes` CLI.
 
-```shell
-python -m pip install --upgrade cruxes # Install the latest version of this toolbox
-# https://pypi.org/project/cruxes/
-```
+PyPI: https://pypi.org/project/cruxes/
 
 ## Catalogue
 
@@ -39,7 +43,8 @@ cruxes warp \
 
 ```shell
 cruxes body-trajectory \
---video_path "examples/videos/body-trajectory-input.mp4"
+--video_path "examples/videos/body-trajectory-input.mp4" \
+--show_trajectory
 # [other options]
 ```
 
@@ -156,7 +161,11 @@ There is a couple of settings you can adjust inside the script for `extract_pose
 | `metadata_path`  | Optional output path for the metadata JSON. Defaults to `<video_stem>_trajectory_metadata.json` next to the input video |
 | `kalman_settings`  | Whether to apply Kalman filter to smooth out the trajectory (not the pose itself) |
 | `savgol_settings`  | Whether to apply Savitzky-Golay filter to smooth the pose skeleton: `[use_savgol, window_length, polyorder]` |
-| `trajectory_png_path`  | Whether to generate a `.png` file for the trajectory with black background |
+| `trajectory_png_path`  | Optional output path for a `.png` export of the trajectory on a black background |
+
+For CLI usage, `--show_trajectory` is required in the normal overlay mode. If you use `--trajectory_only`, trajectory drawing is enabled automatically.
+
+`--savgol_settings` is currently available in the Python API example below, not in the CLI.
 
 Then, run the command as follows:
 
