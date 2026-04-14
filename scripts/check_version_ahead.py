@@ -33,7 +33,9 @@ def _assert_git_repo() -> None:
 
 
 def _get_staged_files() -> list[str]:
-    result = _run_git("diff", "--cached", "--name-only", "--diff-filter=ACMR", check=False)
+    result = _run_git(
+        "diff", "--cached", "--name-only", "--diff-filter=ACMR", check=False
+    )
     if result.returncode != 0:
         return []
     return [line for line in _decode(result.stdout).splitlines() if line]
