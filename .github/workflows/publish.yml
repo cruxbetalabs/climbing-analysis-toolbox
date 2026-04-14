@@ -64,8 +64,13 @@ jobs:
       - name: Generate release notes
         if: steps.check_release.outputs.exists == 'false'
         id: release_notes
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python scripts/generate_release_notes.py --version "${{ steps.get_version.outputs.version }}" > release_notes.md
+          export OPENAI_MODEL="${OPENAI_MODEL:-gpt-5.4-nano}"
+          python scripts/generate_release_notes.py \
+            --version "${{ steps.get_version.outputs.version }}" \
+            --use-openai > release_notes.md
           echo "body<<EOF" >> "$GITHUB_OUTPUT"
           cat release_notes.md >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
