@@ -3,25 +3,43 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from urllib import error, request
 
 
-CATEGORY_ORDER = ("changed", "updated", "added", "improved")
+CATEGORY_ORDER = (
+    "cli_user_workflow",
+    "python_api_developer_integration",
+    "metadata_caching_outputs",
+    "fixes",
+    "performance_reliability",
+    "docs_release_tooling",
+    "breaking_changes",
+    "upgrade_notes",
+)
 CATEGORY_TITLES = {
-    "changed": "What's Changed",
-    "updated": "What's Updated",
-    "added": "What's Added",
-    "improved": "What's Improved",
+    "cli_user_workflow": "CLI and User Workflow",
+    "python_api_developer_integration": "Python API and Developer Integration",
+    "metadata_caching_outputs": "Metadata, Caching, and Output Formats",
+    "fixes": "Fixes",
+    "performance_reliability": "Performance and Reliability",
+    "docs_release_tooling": "Docs and Release Tooling",
+    "breaking_changes": "Breaking Changes",
+    "upgrade_notes": "Upgrade Notes",
 }
 TAG_VERSION_PATTERN = re.compile(r"^v?(\d+(?:\.\d+)*)$")
 CONVENTIONAL_PREFIX_PATTERN = re.compile(r"^[a-z]+(?:\([^)]+\))?!?:\s*", re.IGNORECASE)
 CONVENTIONAL_TYPE_PATTERN = re.compile(
     r"^(?P<type>[a-z]+)(?:\([^)]+\))?!?:\s*", re.IGNORECASE
 )
+OPENAI_API_URL = "https://api.openai.com/v1/responses"
+DEFAULT_OPENAI_MODEL = "gpt-5.4-nano"
 VERSION_ONLY_COMMIT_PATTERNS = (
     re.compile(r"\b(?:bump|update) version\b", re.IGNORECASE),
     re.compile(r"\brelease v?\d", re.IGNORECASE),
@@ -115,27 +133,140 @@ def _normalize_subject(subject: str) -> str:
     return cleaned
 
 
+def _matches_any(text: str, patterns: tuple[str, ...]) -> bool:
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
 def _classify_subject(subject: str) -> str:
     lowered = subject.lower()
     conventional_match = CONVENTIONAL_TYPE_PATTERN.match(subject.strip())
+    commit_type = None
     if conventional_match is not None:
         commit_type = conventional_match.group("type").lower()
-        if commit_type == "feat":
-            return "added"
-        if commit_type in {"refactor", "perf"}:
-            return "improved"
-        if commit_type in {"docs", "chore", "build", "ci", "style"}:
-            return "updated"
-        if commit_type == "fix":
-            return "changed"
 
-    if re.search(r"\b(feat|feature|add|added|new|introduce|introduced|support|supported)\b", lowered):
-        return "added"
-    if re.search(r"\b(improve|improved|enhance|enhanced|optimi[sz]e|optimized|refactor|cleanup|clean up|readability|performance)\b", lowered):
-        return "improved"
-    if re.search(r"\b(update|updated|upgrade|upgraded|docs|documentation|rename|renamed|replace|replaced|remove|removed|delete|deleted|publish|published)\b", lowered):
-        return "updated"
-    return "changed"
+    if _matches_any(
+        lowered, (r"\bbreaking\b", r"\bbreaking change", r"\bincompatible\b")
+    ):
+        return "breaking_changes"
+
+    if _matches_any(
+        lowered,
+        (
+            r"\bmigration\b",
+            r"\bmigrate\b",
+            r"\bupgrade note\b",
+            r"\bdeprecated\b",
+            r"\bdeprecate\b",
+            r"\brename\b",
+            r"\brenamed\b",
+            r"\bclear cache\b",
+            r"\bmanual action\b",
+        ),
+    ):
+        return "upgrade_notes"
+
+    if commit_type in {"docs", "chore", "build", "ci", "style"} or _matches_any(
+        lowered,
+        (
+            r"\breadme\b",
+            r"\bbuild\b",
+            r"\bworkflow\b",
+            r"\bpre-commit\b",
+            r"\bpublish\b",
+            r"\brelease note",
+            r"\bgithub action",
+            r"\bautomation\b",
+            r"\btooling\b",
+            r"\bdocs?\b",
+        ),
+    ):
+        return "docs_release_tooling"
+
+    if _matches_any(
+        lowered,
+        (
+            r"\bmetadata\b",
+            r"\bcache\b",
+            r"\bcached\b",
+            r"\blandmarks?\b",
+            r"\bjson\b",
+            r"\bschema\b",
+            r"\boutput\b",
+            r"\bexport\b",
+            r"\bpng\b",
+            r"\btrajectory metadata\b",
+        ),
+    ):
+        return "metadata_caching_outputs"
+
+    if _matches_any(
+        lowered,
+        (
+            r"\bapi\b",
+            r"\bpublic api\b",
+            r"\bpython\b",
+            r"\bintegration\b",
+            r"\bsignature\b",
+            r"\bwrapper\b",
+            r"\bparameter\b",
+            r"\bargument\b",
+        ),
+    ):
+        return "python_api_developer_integration"
+
+    if commit_type == "fix" or _matches_any(
+        lowered,
+        (
+            r"\bfix\b",
+            r"\bbug\b",
+            r"\bcorrect\b",
+            r"\bregression\b",
+            r"\bresolve\b",
+        ),
+    ):
+        return "fixes"
+
+    if commit_type in {"refactor", "perf"} or _matches_any(
+        lowered,
+        (
+            r"\bperformance\b",
+            r"\breliability\b",
+            r"\bstability\b",
+            r"\brobust\b",
+            r"\boptimi[sz]e\b",
+            r"\boptimized\b",
+            r"\bcleanup\b",
+            r"\bclean up\b",
+            r"\breadability\b",
+            r"\brefactor\b",
+            r"\bcaching option\b",
+        ),
+    ):
+        return "performance_reliability"
+
+    if commit_type == "feat" or _matches_any(
+        lowered,
+        (
+            r"\bcli\b",
+            r"\bcommand\b",
+            r"\bflag\b",
+            r"\boption\b",
+            r"\bworkflow\b",
+            r"\btelemetry\b",
+            r"\bvisuali[sz]ation\b",
+            r"\brender\b",
+            r"\btrajectory\b",
+            r"\bpose\b",
+            r"\bwarp\b",
+            r"\bfeature\b",
+            r"\badd\b",
+            r"\badded\b",
+            r"\bnew\b",
+        ),
+    ):
+        return "cli_user_workflow"
+
+    return "python_api_developer_integration"
 
 
 def _categorize_subjects(subjects: list[str]) -> dict[str, list[str]]:
@@ -169,29 +300,80 @@ def _format_changed_files(files: list[str]) -> list[str]:
     return lines
 
 
-def _render_release_notes(version: str, previous_tag: str | None) -> str:
+def _build_release_context(version: str, previous_tag: str | None) -> dict[str, object]:
     subjects = _list_commit_subjects(previous_tag)
     changed_files = _list_changed_files(previous_tag)
     categories = _categorize_subjects(subjects)
+    return {
+        "version": version,
+        "previous_tag": previous_tag,
+        "commit_range": _commit_range(previous_tag),
+        "subjects": subjects,
+        "changed_files": changed_files,
+        "categories": categories,
+    }
+
+
+def _build_fallback_summary(categories: dict[str, list[str]]) -> str:
+    populated_titles = [
+        CATEGORY_TITLES[category_name]
+        for category_name in CATEGORY_ORDER
+        if categories[category_name]
+    ]
+
+    if not populated_titles:
+        return "This release contains developer-facing maintenance updates."
+
+    if len(populated_titles) == 1:
+        return f"This release focuses on {populated_titles[0].lower()} for developers using the published package."
+
+    if len(populated_titles) == 2:
+        joined = " and ".join(title.lower() for title in populated_titles)
+        return f"This release focuses on {joined} for developers using the published package."
+
+    joined = ", ".join(title.lower() for title in populated_titles[:-1])
+    return (
+        "This release focuses on "
+        f"{joined}, and {populated_titles[-1].lower()} for developers using the published package."
+    )
+
+
+def _has_entries(categories: dict[str, list[str]]) -> bool:
+    return any(categories[category_name] for category_name in CATEGORY_ORDER)
+
+
+def _render_release_notes_from_sections(
+    version: str,
+    previous_tag: str | None,
+    commit_range: str,
+    changed_files: list[str],
+    summary: str,
+    categories: dict[str, list[str]],
+) -> str:
 
     lines = [f"## Release v{version}", ""]
     if previous_tag is not None:
         lines.append(f"Based on changes since `{previous_tag}`.")
     else:
-        lines.append("Based on all changes currently available in the repository history.")
+        lines.append(
+            "Based on all changes currently available in the repository history."
+        )
+    lines.append("")
+
+    lines.append("### Developer Summary")
+    lines.append(summary)
     lines.append("")
 
     for category_name in CATEGORY_ORDER:
-        lines.append(f"### {CATEGORY_TITLES[category_name]}")
         entries = categories[category_name]
-        if entries:
-            lines.extend(f"- {entry}" for entry in entries)
-        else:
-            lines.append("- No developer-facing items were classified in this section.")
+        if not entries:
+            continue
+        lines.append(f"### {CATEGORY_TITLES[category_name]}")
+        lines.extend(f"- {entry}" for entry in entries)
         lines.append("")
 
     lines.append("### Developer Notes")
-    lines.append(f"- Commit range: `{_commit_range(previous_tag)}`")
+    lines.append(f"- Commit range: `{commit_range}`")
     lines.append("- Files touched:")
     lines.extend(_format_changed_files(changed_files))
     lines.append("")
@@ -203,6 +385,167 @@ def _render_release_notes(version: str, previous_tag: str | None) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+def _render_fallback_release_notes(context: dict[str, object]) -> str:
+    categories = context["categories"]
+    assert isinstance(categories, dict)
+    summary = _build_fallback_summary(categories)
+    return _render_release_notes_from_sections(
+        version=str(context["version"]),
+        previous_tag=context["previous_tag"],
+        commit_range=str(context["commit_range"]),
+        changed_files=list(context["changed_files"]),
+        summary=summary,
+        categories=categories,
+    )
+
+
+def _build_openai_prompt(context: dict[str, object]) -> str:
+    return (
+        "You are writing developer-focused release notes for a Python package release. "
+        "Write concise, concrete notes that summarize what shipped for developers. "
+        "Avoid marketing language, avoid inventing details, and rely only on the provided git history context.\n\n"
+        "Return valid JSON with this exact shape:\n"
+        "{\n"
+        '  "summary": "short paragraph",\n'
+        '  "cli_user_workflow": ["bullet", "bullet"],\n'
+        '  "python_api_developer_integration": ["bullet", "bullet"],\n'
+        '  "metadata_caching_outputs": ["bullet", "bullet"],\n'
+        '  "fixes": ["bullet", "bullet"],\n'
+        '  "performance_reliability": ["bullet", "bullet"],\n'
+        '  "docs_release_tooling": ["bullet", "bullet"],\n'
+        '  "breaking_changes": ["bullet", "bullet"],\n'
+        '  "upgrade_notes": ["bullet", "bullet"]\n'
+        "}\n\n"
+        "Rules:\n"
+        "- `summary` must be 1-2 sentences.\n"
+        "- Each list item must be a concise developer-facing statement.\n"
+        "- `cli_user_workflow` is for CLI-visible behavior, flags, commands, and user-facing workflow changes.\n"
+        "- `python_api_developer_integration` is for Python API changes, wrappers, integrations, and developer-facing interfaces.\n"
+        "- `metadata_caching_outputs` is for metadata schema, caching, exported files, JSON payloads, and output-format changes.\n"
+        "- `fixes` is for bugs and corrected behavior.\n"
+        "- `performance_reliability` is for speed, stability, cleanup, robustness, and maintainability improvements that change execution quality.\n"
+        "- `docs_release_tooling` is for docs, CI, pre-commit, publishing, and release automation changes.\n"
+        "- `breaking_changes` is only for incompatible changes that require consumer attention.\n"
+        "- `upgrade_notes` is for migration guidance, renamed options, deprecations, cache reset notes, or manual upgrade actions.\n"
+        "- Use empty arrays when a section has nothing worth mentioning.\n"
+        "- Do not mention version bumps unless they matter to developers.\n\n"
+        f"Version: {context['version']}\n"
+        f"Previous tag: {context['previous_tag']}\n"
+        f"Commit range: {context['commit_range']}\n\n"
+        "Commit subjects:\n"
+        + json.dumps(context["subjects"], indent=2)
+        + "\n\nChanged files:\n"
+        + json.dumps(context["changed_files"], indent=2)
+        + "\n\nDeterministic pre-classification:\n"
+        + json.dumps(context["categories"], indent=2)
+        + "\n"
+    )
+
+
+def _extract_response_text(payload: dict[str, object]) -> str:
+    output = payload.get("output")
+    if isinstance(output, list):
+        text_parts: list[str] = []
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            content = item.get("content")
+            if not isinstance(content, list):
+                continue
+            for content_item in content:
+                if not isinstance(content_item, dict):
+                    continue
+                if content_item.get("type") in {"output_text", "text"}:
+                    text_value = content_item.get("text")
+                    if isinstance(text_value, str):
+                        text_parts.append(text_value)
+        if text_parts:
+            return "\n".join(text_parts).strip()
+
+    output_text = payload.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text.strip()
+
+    raise RuntimeError("OpenAI response did not contain text output")
+
+
+def _call_openai_release_notes(context: dict[str, object], model: str) -> str:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+
+    request_payload = {
+        "model": model,
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": _build_openai_prompt(context),
+                    }
+                ],
+            }
+        ],
+    }
+
+    http_request = request.Request(
+        OPENAI_API_URL,
+        data=json.dumps(request_payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(http_request, timeout=60) as response:
+            response_payload = json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"OpenAI API request failed: {exc.code} {body}") from exc
+    except error.URLError as exc:
+        raise RuntimeError(f"OpenAI API request failed: {exc.reason}") from exc
+
+    response_text = _extract_response_text(response_payload)
+    llm_sections = json.loads(response_text)
+
+    if not isinstance(llm_sections, dict):
+        raise RuntimeError("OpenAI response JSON was not an object")
+
+    summary = llm_sections.get("summary")
+    categories: dict[str, list[str]] = {name: [] for name in CATEGORY_ORDER}
+    if not isinstance(summary, str) or not summary.strip():
+        raise RuntimeError("OpenAI response did not include a valid summary")
+
+    for category_name in CATEGORY_ORDER:
+        entries = llm_sections.get(category_name, [])
+        if not isinstance(entries, list):
+            raise RuntimeError(
+                f"OpenAI response section '{category_name}' was not a list"
+            )
+        cleaned_entries = []
+        for entry in entries:
+            if isinstance(entry, str) and entry.strip():
+                cleaned_entries.append(entry.strip())
+        categories[category_name] = cleaned_entries
+
+    if not _has_entries(categories):
+        raise RuntimeError(
+            "OpenAI response did not include any categorized release note entries"
+        )
+
+    return _render_release_notes_from_sections(
+        version=str(context["version"]),
+        previous_tag=context["previous_tag"],
+        commit_range=str(context["commit_range"]),
+        changed_files=list(context["changed_files"]),
+        summary=summary.strip(),
+        categories=categories,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Generate categorized release notes from git history."
@@ -212,14 +555,41 @@ def main() -> int:
         default=None,
         help="Release version. Defaults to project.version in pyproject.toml.",
     )
+    parser.add_argument(
+        "--use-openai",
+        action="store_true",
+        help="Use the OpenAI API to generate a higher-level summary with deterministic fallback.",
+    )
+    parser.add_argument(
+        "--openai-model",
+        default=os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
+        help="OpenAI model to use when --use-openai is enabled.",
+    )
     args = parser.parse_args()
 
     try:
         version = args.version or _read_version_from_pyproject()
         previous_tag = _find_previous_tag(version)
-        sys.stdout.write(_render_release_notes(version, previous_tag))
+        context = _build_release_context(version, previous_tag)
+        if args.use_openai:
+            try:
+                sys.stdout.write(_call_openai_release_notes(context, args.openai_model))
+                return 0
+            except (json.JSONDecodeError, RuntimeError) as exc:
+                print(
+                    f"OpenAI release note generation failed, falling back to deterministic notes: {exc}",
+                    file=sys.stderr,
+                )
+
+        sys.stdout.write(_render_fallback_release_notes(context))
         return 0
-    except (KeyError, OSError, RuntimeError, tomllib.TOMLDecodeError, ValueError) as exc:
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        tomllib.TOMLDecodeError,
+        ValueError,
+    ) as exc:
         print(f"Failed to generate release notes: {exc}", file=sys.stderr)
         return 1
 
