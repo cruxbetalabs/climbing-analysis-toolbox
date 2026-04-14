@@ -36,3 +36,17 @@ def get_output_path(input_video_path, output_video_path, output_prefix: str) -> 
             )
 
         return output_video_path
+
+
+def get_landmarks_json_path(input_video_path, landmarks_json_path=None) -> str:
+    if landmarks_json_path is not None:
+        output_dir = os.path.dirname(landmarks_json_path)
+        if output_dir and not os.path.exists(output_dir):
+            raise ValueError(
+                f"Landmarks path {landmarks_json_path} does not exist. Please specify a valid path."
+            )
+        return landmarks_json_path
+
+    input_dir = os.path.dirname(input_video_path) or "."
+    file_stem = os.path.splitext(os.path.basename(input_video_path))[0]
+    return os.path.join(input_dir, f"{file_stem}_landmarks.json")

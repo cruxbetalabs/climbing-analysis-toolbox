@@ -140,11 +140,16 @@ There is a couple of settings you can adjust inside the script for `extract_pose
 | Argument | Description | 
 | - | - |
 | `track_point`  | Points of interest on the estimated pose you want to track. A velocity vector arrow will be drawn to indicate how fast each point is moving with respect to its 3D position |
-| `overlay_mask`  | Whether to overlay a half-transparent mask on top of the original video. Note that if this is set to `True`, the velocity vector arrow that corresponds to each track point will be removed. |
+| `overlay_mask`  | Whether to overlay a half-transparent mask on top of the original video. |
 | `hide_original_video`  | Whether to use a black background instead of the original video (useful for creating clean trajectory visualizations) |
 | `draw_pose`  | Whether to draw pose skeleton or not |
 | `pose_color`  | Color for the pose skeleton in BGR format (default: white `(255, 255, 255)`) |
 | `show_trajectory`  | Whether to draw the trajectories (default: `True`) |
+| `show_gauges`  | Whether to show a top-left telemetry panel with `ref_v`, `vel_ratio`, and `arrow_len` for each tracked joint |
+| `trajectory_history_seconds`  | If set, only the last `N` seconds of each joint trajectory are shown; if omitted, the full path is shown |
+| `use_cached_landmarks`  | Whether to reuse a matching landmarks JSON cache instead of recomputing pose landmarks |
+| `export_landmarks`  | Whether to save the collected pose landmarks to JSON after detection |
+| `landmarks_json_path`  | Optional cache file path. Defaults to `<video_stem>_landmarks.json` next to the input video |
 | `kalman_settings`  | Whether to apply Kalman filter to smooth out the trajectory (not the pose itself) |
 | `savgol_settings`  | Whether to apply Savitzky-Golay filter to smooth the pose skeleton: `[use_savgol, window_length, polyorder]` |
 | `trajectory_png_path`  | Whether to generate a `.png` file for the trajectory with black background |
@@ -158,6 +163,10 @@ cruxes body-trajectory \
 --overlay_mask \
 --draw_pose \
 --show_trajectory \
+--show_gauges \
+--trajectory_history_seconds 2 \
+--use_cached_landmarks \
+--export_landmarks \
 --kalman_settings 1e0
 # Additional options:
 # --hide_original_video  # Use black background
@@ -183,7 +192,11 @@ cruxes.body_trajectory(
     hide_original_video=False,
     draw_pose=True,
     pose_color=(255, 255, 255),  # White color in BGR
+    show_gauges=True,  # Show top-left telemetry for each tracked joint
     show_trajectory=True,
+    trajectory_history_seconds=2.0,  # Show only the last 2 seconds; omit for full history
+    use_cached_landmarks=True,  # Reuse a matching landmarks cache if present
+    export_landmarks=True,  # Save computed landmarks for later experimentation
     kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
         True,  # Set this to false if you don't want to apply Kalman filter
         1e0,  # >=1e0 for higher noise, <=1e-1 for lower noise

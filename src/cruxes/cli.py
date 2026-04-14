@@ -62,6 +62,35 @@ def main():
         help="Draw trajectories.",
     )
     body_parser.add_argument(
+        "--show_gauges",
+        action="store_true",
+        default=False,
+        help="Show top-left telemetry info for each tracked joint.",
+    )
+    body_parser.add_argument(
+        "--trajectory_history_seconds",
+        type=float,
+        default=None,
+        help="Only show the last N seconds of each trajectory. By default the full trajectory is shown.",
+    )
+    body_parser.add_argument(
+        "--use_cached_landmarks",
+        action="store_true",
+        default=False,
+        help="Reuse a matching landmarks JSON cache if one exists.",
+    )
+    body_parser.add_argument(
+        "--export_landmarks",
+        action="store_true",
+        default=False,
+        help="Export detected landmarks to JSON for reuse in later runs.",
+    )
+    body_parser.add_argument(
+        "--landmarks_json_path",
+        default=None,
+        help="Optional path to the landmarks JSON cache. Defaults to <video_stem>_landmarks.json next to the input video.",
+    )
+    body_parser.add_argument(
         "--kalman_settings",
         type=float,
         default=None,
@@ -92,7 +121,12 @@ def main():
             hide_original_video=args.hide_original_video,
             draw_pose=args.draw_pose,
             overlay_mask=args.overlay_mask,
+            show_gauges=args.show_gauges,
             show_trajectory=args.show_trajectory,
+            trajectory_history_seconds=args.trajectory_history_seconds,
+            use_cached_landmarks=args.use_cached_landmarks,
+            export_landmarks=args.export_landmarks,
+            landmarks_json_path=args.landmarks_json_path,
             kalman_settings=kalman_settings,
             trajectory_png_path=args.trajectory_png_path,
         )

@@ -145,7 +145,12 @@ class Cruxes:
             255,
             255,
         ),  # Color for pose skeleton in BGR format (default: white)
+        show_gauges=False,
         show_trajectory=True,
+        trajectory_history_seconds=None,
+        use_cached_landmarks=False,
+        export_landmarks=False,
+        landmarks_json_path=None,
         kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
             True,  # Set this to false if you don't want to apply Kalman filter
             1e0,  # >=1e0 for higher noise, <=1e-1 for lower noise
@@ -176,7 +181,12 @@ class Cruxes:
             hide_original_video=hide_original_video,
             draw_pose=draw_pose,
             pose_color=pose_color,
+            show_gauges=show_gauges,
             show_trajectory=show_trajectory,
+            trajectory_history_seconds=trajectory_history_seconds,
+            use_cached_landmarks=use_cached_landmarks,
+            export_landmarks=export_landmarks,
+            landmarks_json_path=landmarks_json_path,
             kalman_settings=kalman_settings,
             trajectory_png_path=trajectory_png_path,
             savgol_settings=savgol_settings,
