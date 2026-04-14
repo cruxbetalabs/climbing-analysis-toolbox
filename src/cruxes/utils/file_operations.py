@@ -12,11 +12,11 @@ def get_output_path(input_video_path, output_video_path, output_prefix: str) -> 
 
         # append a prefix to the file name
         file_name = f"{output_prefix}_{file_name}"
-        
+
         # if input_dir is empty (file in current directory), use current directory
         if not input_dir:
             input_dir = "."
-        
+
         output_path = os.path.join(input_dir, file_name)
 
         print(

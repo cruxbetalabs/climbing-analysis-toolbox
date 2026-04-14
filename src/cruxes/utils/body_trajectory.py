@@ -185,7 +185,9 @@ def _load_landmarks_cache(
     if len(frames_payload) != total_frames:
         return None, "cache frame count does not match the video"
 
-    return [_deserialize_landmarks(frame_landmarks) for frame_landmarks in frames_payload], None
+    return [
+        _deserialize_landmarks(frame_landmarks) for frame_landmarks in frames_payload
+    ], None
 
 
 def extract_pose_and_draw_trajectory(
@@ -304,7 +306,11 @@ def extract_pose_and_draw_trajectory(
     )
 
     cached_pose_landmarks = None
-    if use_cached_landmarks and landmarks_cache_path and os.path.exists(landmarks_cache_path):
+    if (
+        use_cached_landmarks
+        and landmarks_cache_path
+        and os.path.exists(landmarks_cache_path)
+    ):
         cached_pose_landmarks, cache_error = _load_landmarks_cache(
             landmarks_cache_path,
             video_path,
@@ -334,9 +340,7 @@ def extract_pose_and_draw_trajectory(
     try:
         if cached_pose_landmarks is None:
             pose_detector = PoseDetector()
-        with tqdm(
-            total=total_frames, desc=first_pass_desc, unit="frame"
-        ) as pbar:
+        with tqdm(total=total_frames, desc=first_pass_desc, unit="frame") as pbar:
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
