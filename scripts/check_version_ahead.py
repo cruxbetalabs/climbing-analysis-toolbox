@@ -9,7 +9,7 @@ import tomllib
 from packaging.version import InvalidVersion, Version
 
 
-REMOTE_FALLBACK_REFS = ("origin/main", "origin/master")
+PREFERRED_BASE_REFS = ("origin/main", "origin/master", "main", "master")
 
 
 def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
@@ -74,7 +74,12 @@ def _read_index_version() -> Version:
     return _read_version_from_toml_bytes(result.stdout, "staged pyproject.toml")
 
 
-def _resolve_remote_ref() -> str | None:
+def _resolve_base_ref() -> str | None:
+    for ref in PREFERRED_BASE_REFS:
+        exists = _run_git("rev-parse", "--verify", "--quiet", ref, check=False)
+        if exists.returncode == 0:
+            return ref
+
     upstream = _run_git(
         "rev-parse",
         "--abbrev-ref",
@@ -84,11 +89,6 @@ def _resolve_remote_ref() -> str | None:
     )
     if upstream.returncode == 0:
         return _decode(upstream.stdout)
-
-    for ref in REMOTE_FALLBACK_REFS:
-        exists = _run_git("rev-parse", "--verify", "--quiet", ref, check=False)
-        if exists.returncode == 0:
-            return ref
 
     return None
 
@@ -107,21 +107,21 @@ def main() -> int:
         if not _touches_published_package(staged_files):
             return 0
 
-        remote_ref = _resolve_remote_ref()
-        if remote_ref is None:
+        base_ref = _resolve_base_ref()
+        if base_ref is None:
             print(
-                "Skipping version check: no upstream or origin/main reference is available yet.",
+                "Skipping version check: no main/master or upstream reference is available yet.",
                 file=sys.stderr,
             )
             return 0
 
         local_version = _read_index_version()
-        remote_version = _read_remote_version(remote_ref)
+        remote_version = _read_remote_version(base_ref)
 
         if local_version <= remote_version:
             print(
                 "Version check failed: staged pyproject.toml must be higher than "
-                f"{remote_ref} when commit content touches publishable package files.",
+                f"{base_ref} when commit content touches publishable package files.",
                 file=sys.stderr,
             )
             print(
@@ -129,7 +129,7 @@ def main() -> int:
                 file=sys.stderr,
             )
             print(
-                f"{remote_ref} version: {remote_version}",
+                f"{base_ref} version: {remote_version}",
                 file=sys.stderr,
             )
             print(
