@@ -144,7 +144,9 @@ def _classify_subject(subject: str) -> str:
     if conventional_match is not None:
         commit_type = conventional_match.group("type").lower()
 
-    if _matches_any(lowered, (r"\bbreaking\b", r"\bbreaking change", r"\bincompatible\b")):
+    if _matches_any(
+        lowered, (r"\bbreaking\b", r"\bbreaking change", r"\bincompatible\b")
+    ):
         return "breaking_changes"
 
     if _matches_any(
@@ -353,7 +355,9 @@ def _render_release_notes_from_sections(
     if previous_tag is not None:
         lines.append(f"Based on changes since `{previous_tag}`.")
     else:
-        lines.append("Based on all changes currently available in the repository history.")
+        lines.append(
+            "Based on all changes currently available in the repository history."
+        )
     lines.append("")
 
     lines.append("### Developer Summary")
@@ -528,7 +532,9 @@ def _call_openai_release_notes(context: dict[str, object], model: str) -> str:
         categories[category_name] = cleaned_entries
 
     if not _has_entries(categories):
-        raise RuntimeError("OpenAI response did not include any categorized release note entries")
+        raise RuntimeError(
+            "OpenAI response did not include any categorized release note entries"
+        )
 
     return _render_release_notes_from_sections(
         version=str(context["version"]),
@@ -567,9 +573,7 @@ def main() -> int:
         context = _build_release_context(version, previous_tag)
         if args.use_openai:
             try:
-                sys.stdout.write(
-                    _call_openai_release_notes(context, args.openai_model)
-                )
+                sys.stdout.write(_call_openai_release_notes(context, args.openai_model))
                 return 0
             except (json.JSONDecodeError, RuntimeError) as exc:
                 print(
@@ -579,7 +583,13 @@ def main() -> int:
 
         sys.stdout.write(_render_fallback_release_notes(context))
         return 0
-    except (KeyError, OSError, RuntimeError, tomllib.TOMLDecodeError, ValueError) as exc:
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        tomllib.TOMLDecodeError,
+        ValueError,
+    ) as exc:
         print(f"Failed to generate release notes: {exc}", file=sys.stderr)
         return 1
 
