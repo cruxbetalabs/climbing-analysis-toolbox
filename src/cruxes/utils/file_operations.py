@@ -50,3 +50,19 @@ def get_landmarks_json_path(input_video_path, landmarks_json_path=None) -> str:
     input_dir = os.path.dirname(input_video_path) or "."
     file_stem = os.path.splitext(os.path.basename(input_video_path))[0]
     return os.path.join(input_dir, f"{file_stem}_landmarks.json")
+
+
+def get_trajectory_metadata_path(
+    input_video_path, trajectory_metadata_path=None
+) -> str:
+    if trajectory_metadata_path is not None:
+        output_dir = os.path.dirname(trajectory_metadata_path)
+        if output_dir and not os.path.exists(output_dir):
+            raise ValueError(
+                f"Trajectory metadata path {trajectory_metadata_path} does not exist. Please specify a valid path."
+            )
+        return trajectory_metadata_path
+
+    input_dir = os.path.dirname(input_video_path) or "."
+    file_stem = os.path.splitext(os.path.basename(input_video_path))[0]
+    return os.path.join(input_dir, f"{file_stem}_trajectory_metadata.json")

@@ -36,6 +36,12 @@ def main():
         help="Comma-separated points of interest to track. Available: hip_mid, upper_body_center, head, left_hand, right_hand, left_foot, right_foot",
     )
     body_parser.add_argument(
+        "--trajectory_only",
+        action="store_true",
+        default=False,
+        help="Render only the trajectory on a black background. This disables pose drawing and telemetry, forces trajectory drawing on, and prefers cached trajectory metadata if available.",
+    )
+    body_parser.add_argument(
         "--overlay_mask",
         dest="overlay_mask",
         action="store_true",
@@ -91,6 +97,36 @@ def main():
         help="Optional path to the landmarks JSON cache. Defaults to <video_stem>_landmarks.json next to the input video.",
     )
     body_parser.add_argument(
+        "--use_cached_trajectory_metadata",
+        action="store_true",
+        default=False,
+        help="Reuse a matching trajectory metadata JSON file if one exists. This selects the trajectory data source; use --show_trajectory to control drawing.",
+    )
+    body_parser.add_argument(
+        "--export_metadata",
+        action="store_true",
+        default=False,
+        help="Export unified frontend-facing metadata JSON for downstream rendering or analysis.",
+    )
+    body_parser.add_argument(
+        "--metadata_path",
+        default=None,
+        help="Optional path to the metadata JSON file. Defaults to <video_stem>_trajectory_metadata.json next to the input video.",
+    )
+    body_parser.add_argument(
+        "--export_trajectory_metadata",
+        dest="export_trajectory_metadata",
+        action="store_true",
+        default=False,
+        help=argparse.SUPPRESS,
+    )
+    body_parser.add_argument(
+        "--trajectory_metadata_path",
+        dest="trajectory_metadata_path",
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    body_parser.add_argument(
         "--kalman_settings",
         type=float,
         default=None,
@@ -115,9 +151,12 @@ def main():
         else:
             kalman_settings = [False, 1e-1]  # default gain if disabled
         track_points = [p.strip() for p in args.track_point.split(",") if p.strip()]
+        export_metadata = args.export_metadata or args.export_trajectory_metadata
+        metadata_path = args.metadata_path or args.trajectory_metadata_path
         cruxes.body_trajectory(
             args.video_path,
             track_point=track_points,
+            trajectory_only=args.trajectory_only,
             hide_original_video=args.hide_original_video,
             draw_pose=args.draw_pose,
             overlay_mask=args.overlay_mask,
@@ -127,6 +166,11 @@ def main():
             use_cached_landmarks=args.use_cached_landmarks,
             export_landmarks=args.export_landmarks,
             landmarks_json_path=args.landmarks_json_path,
+            use_cached_trajectory_metadata=args.use_cached_trajectory_metadata,
+            export_metadata=export_metadata,
+            metadata_path=metadata_path,
+            export_trajectory_metadata=args.export_trajectory_metadata,
+            trajectory_metadata_path=args.trajectory_metadata_path,
             kalman_settings=kalman_settings,
             trajectory_png_path=args.trajectory_png_path,
         )

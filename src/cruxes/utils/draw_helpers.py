@@ -7,6 +7,12 @@ def draw_trajectory(canvas, traj, color, thickness=2):
         cv2.line(canvas, traj[i - 1], traj[i], color, thickness)
 
 
+def draw_colored_trajectory(canvas, traj, segment_colors, thickness=2):
+    for idx in range(1, len(traj)):
+        color = segment_colors[idx - 1]
+        cv2.line(canvas, traj[idx - 1], traj[idx], color, thickness)
+
+
 def draw_velocity_arrow(canvas, prev_point, curr_point, color, scale=5, thickness=3):
     dx = curr_point[0] - prev_point[0]
     dy = curr_point[1] - prev_point[1]
@@ -32,7 +38,7 @@ def draw_telemetry_panel(canvas, telemetry_rows, origin=(20, 20)):
     font_scale = 0.55
     text_thickness = 1
     line_height = 24
-    header = "joint | ref_v | vel_ratio | arrow_len"
+    header = "joint | raw_v | vel_ratio"
     padding_x = 10
     padding_y = 10
 

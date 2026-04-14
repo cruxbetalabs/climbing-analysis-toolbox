@@ -50,24 +50,28 @@ def main():
         # tracking relevant
         track_point=[
             "hip_mid",
-            # "upper_body_center",
+            "upper_body_center",
             # "head",
             # "left_hand",
             # "right_hand",
-            # "left_foot",
-            # "right_foot",
+            "left_foot",
+            "right_foot",
         ],
+        # trajectory_only=True,
+        #
         draw_pose=True,
-        pose_color=(0, 255, 0),
+        pose_color=(255, 255, 255),
         show_trajectory=True,
         show_gauges=True,
-        trajectory_history_seconds=2.0,
+        trajectory_history_seconds=0.5,
         use_cached_landmarks=True,
+        use_cached_trajectory_metadata=True,
         export_landmarks=True,
-        overlay_mask=True,
+        export_metadata=True,
+        overlay_mask=False,
         hide_original_video=False,
         kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
-            False,  # Set this to false if you don't want to apply Kalman filter
+            True,  # Set this to false if you don't want to apply Kalman filter
             0.5e0,  # >=1e0 for higher noise, <=1e-1 for lower noise
         ],
         # Savitzky-Golay filter settings: [use_savgol : bool, window_length : int, polyorder : int]
