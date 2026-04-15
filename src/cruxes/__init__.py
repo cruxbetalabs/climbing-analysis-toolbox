@@ -5,7 +5,6 @@ from .utils.file_operations import get_output_path
 from .utils.warp_video import warp_video_with_per_frame_homography
 from .utils.warp_video import warp_video_with_fixed_homography
 from .utils.body_trajectory import extract_pose_and_draw_trajectory
-from .utils.compare_trajectories import extract_pose_and_draw_trajectory_compare
 
 
 class Cruxes:
@@ -234,6 +233,10 @@ class Cruxes:
             input_video_paths[0] if input_video_paths else None,
             None,
             output_prefix=output_prefix,
+        )
+
+        from .utils.compare_trajectories import (
+            extract_pose_and_draw_trajectory_compare,
         )
 
         extract_pose_and_draw_trajectory_compare(
