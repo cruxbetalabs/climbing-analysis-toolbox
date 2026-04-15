@@ -135,6 +135,7 @@ class Cruxes:
             # "left_foot",
             # "right_foot",
         ],
+        json_only=False,
         trajectory_only=False,
         overlay_mask=False,
         overlay_trajectory=None,  # deprecated alias
@@ -171,18 +172,20 @@ class Cruxes:
         if metadata_path is None and trajectory_metadata_path is not None:
             metadata_path = trajectory_metadata_path
 
-        output_prefix = "pose_trajectory"
-        # Derive output video path using get_output_path
-        output_video_path = get_output_path(
-            target_video_path,
-            None,
-            output_prefix=output_prefix,
-        )
+        output_video_path = None
+        if not json_only:
+            output_prefix = "pose_trajectory"
+            output_video_path = get_output_path(
+                target_video_path,
+                None,
+                output_prefix=output_prefix,
+            )
 
         extract_pose_and_draw_trajectory(
             target_video_path,
             output_path=output_video_path,
             track_point=track_point,
+            json_only=json_only,
             trajectory_only=trajectory_only,
             overlay_mask=overlay_mask,
             hide_original_video=hide_original_video,

@@ -145,6 +145,7 @@ There is a couple of settings you can adjust inside the script for `extract_pose
 | Argument | Description | 
 | - | - |
 | `track_point`  | Points of interest on the estimated pose you want to track. A velocity vector arrow will be drawn to indicate how fast each point is moving with respect to its 3D position |
+| `json_only`  | Export landmarks and metadata JSON only. This skips rendered video and PNG outputs and forces both JSON exports on |
 | `trajectory_only`  | Render only the trajectory on a black background. This disables pose drawing and telemetry, forces trajectory drawing on, and prefers cached trajectory metadata if available |
 | `overlay_mask`  | Whether to overlay a half-transparent mask on top of the original video. |
 | `hide_original_video`  | Whether to use a black background instead of the original video (useful for creating clean trajectory visualizations) |
@@ -163,7 +164,7 @@ There is a couple of settings you can adjust inside the script for `extract_pose
 | `savgol_settings`  | Whether to apply Savitzky-Golay filter to smooth the pose skeleton: `[use_savgol, window_length, polyorder]` |
 | `trajectory_png_path`  | Optional output path for a `.png` export of the trajectory on a black background |
 
-For CLI usage, `--show_trajectory` is required in the normal overlay mode. If you use `--trajectory_only`, trajectory drawing is enabled automatically.
+For CLI usage, `--show_trajectory` is required in the normal overlay mode. If you use `--trajectory_only`, trajectory drawing is enabled automatically. If you use `--json_only`, rendering flags are ignored and only the JSON artifacts are written.
 
 `--savgol_settings` is currently available in the Python API example below, not in the CLI.
 
@@ -183,6 +184,7 @@ cruxes body-trajectory \
 --use_cached_trajectory_metadata \
 --export_landmarks \
 --export_metadata \
+--json_only \
 --kalman_settings 1e0
 # Additional options:
 # --hide_original_video  # Use black background
@@ -206,6 +208,7 @@ cruxes.body_trajectory(
         "left_foot",
         "right_foot",
     ],
+    json_only=False,  # Set True to export landmarks/metadata JSON only
     trajectory_only=False,  # Set True for black-background trajectory-only output
     overlay_mask=False,
     hide_original_video=False,
