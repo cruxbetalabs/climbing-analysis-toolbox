@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cruxes"
-version = "0.1.16"
+version = "0.1.17"
 description = "A set of computer vision tools for analyzing your climbing videos."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -33,3 +33,11 @@ dependencies = [
 
 [project.scripts]
 cruxes = "cruxes.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cruxes*"]
+namespaces = true
