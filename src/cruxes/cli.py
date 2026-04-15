@@ -42,6 +42,12 @@ def main():
         help="Render only the trajectory on a black background. This disables pose drawing and telemetry, forces trajectory drawing on, and prefers cached trajectory metadata if available.",
     )
     body_parser.add_argument(
+        "--json_only",
+        action="store_true",
+        default=False,
+        help="Export landmarks and metadata JSON only, without writing a rendered video.",
+    )
+    body_parser.add_argument(
         "--overlay_mask",
         dest="overlay_mask",
         action="store_true",
@@ -156,6 +162,7 @@ def main():
         cruxes.body_trajectory(
             args.video_path,
             track_point=track_points,
+            json_only=args.json_only,
             trajectory_only=args.trajectory_only,
             hide_original_video=args.hide_original_video,
             draw_pose=args.draw_pose,

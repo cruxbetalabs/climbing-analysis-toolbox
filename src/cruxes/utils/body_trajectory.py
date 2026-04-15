@@ -758,6 +758,7 @@ def extract_pose_and_draw_trajectory(
     video_path,
     output_path=None,  # optional, if not provided, the output video will be saved in the `output` folder
     track_point=["hip_mid"],  # a list of track points to draw trajectory for
+    json_only=False,
     trajectory_only=False,
     hide_original_video=False,  # if True, the output video will have a black background instead of the original frames
     overlay_mask=False,  # if `True`, we draw trajectory on a semi-transparent black overlay
@@ -789,6 +790,10 @@ def extract_pose_and_draw_trajectory(
 
     if overlay_trajectory is not None:
         overlay_mask = overlay_trajectory
+
+    if json_only:
+        export_landmarks = True
+        export_metadata = True
 
     if trajectory_only:
         hide_original_video = True
@@ -865,20 +870,22 @@ def extract_pose_and_draw_trajectory(
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     pose_detector = None
     cached_trajectory_payload = None
+    render_video = not json_only
 
-    # Set output path if not provided
-    output_path = get_output_path(
-        video_path,
-        output_path,
-        output_prefix="pose_trajectory",
-    )
+    out = None
+    if render_video:
+        output_path = get_output_path(
+            video_path,
+            output_path,
+            output_prefix="pose_trajectory",
+        )
 
-    out = cv2.VideoWriter(
-        output_path,
-        fourcc if fourcc != 0 else cv2.VideoWriter_fourcc(*"mp4v"),
-        fps,
-        (width, height),
-    )
+        out = cv2.VideoWriter(
+            output_path,
+            fourcc if fourcc != 0 else cv2.VideoWriter_fourcc(*"mp4v"),
+            fps,
+            (width, height),
+        )
 
     # Initialize overlay canvas if needed
     overlay_canvas = None
@@ -887,7 +894,7 @@ def extract_pose_and_draw_trajectory(
     # while keeping trajectory extraction separate.
 
     # First pass: read frames and either collect or load pose landmarks.
-    frames_data = []  # Store frame data for second pass
+    frames_data = []  # Store frame data for second pass when video rendering is enabled
     all_pose_landmarks = []  # Store all pose landmarks for smoothing
 
     # Get total frame count for progress bar
@@ -980,11 +987,14 @@ def extract_pose_and_draw_trajectory(
                 if not ret:
                     break
 
-                frames_data.append(frame.copy())
+                frame_number = len(all_pose_landmarks) + 1
+                if render_video:
+                    frames_data.append(frame.copy())
+
                 if cached_pose_landmarks is not None:
-                    landmarks = cached_pose_landmarks[len(frames_data) - 1]
+                    landmarks = cached_pose_landmarks[frame_number - 1]
                 elif pose_detector is not None:
-                    timestamp_ms = int(len(frames_data) * 1000 / effective_fps)
+                    timestamp_ms = int(frame_number * 1000 / effective_fps)
                     results = pose_detector.process(frame, timestamp_ms=timestamp_ms)
                     landmarks = results.pose_landmarks
                 else:
@@ -1097,149 +1107,153 @@ def extract_pose_and_draw_trajectory(
             _save_trajectory_metadata(trajectory_export_path, trajectory_metadata)
             print(f"Saved trajectory metadata to {trajectory_export_path}")
 
-        print(
-            "Second pass - rendering video with raw trajectories and "
-            f"{'smoothed' if use_savgol else 'raw'} skeleton..."
-        )
-        frame_idx = 0
+        if render_video:
+            print(
+                "Second pass - rendering video with raw trajectories and "
+                f"{'smoothed' if use_savgol else 'raw'} skeleton..."
+            )
+            frame_idx = 0
 
-        with tqdm(total=len(frames_data), desc="Rendering video", unit="frame") as pbar:
-            for frame in frames_data:
-                if hide_original_video:
-                    frame = np.zeros_like(frame)
+            with tqdm(total=len(frames_data), desc="Rendering video", unit="frame") as pbar:
+                for frame in frames_data:
+                    if hide_original_video:
+                        frame = np.zeros_like(frame)
 
-                velocity_arrows = []
-                telemetry_rows = []
+                    velocity_arrows = []
+                    telemetry_rows = []
 
-                if overlay_mask:
-                    if overlay_canvas is None or trajectory_history_frames is not None:
-                        overlay_canvas = np.zeros_like(frame)
-                        overlay_canvas[:] = (0, 0, 0)
+                    if overlay_mask:
+                        if overlay_canvas is None or trajectory_history_frames is not None:
+                            overlay_canvas = np.zeros_like(frame)
+                            overlay_canvas[:] = (0, 0, 0)
 
-                pose_landmarks_for_drawing = None
-                if draw_pose and frame_idx < len(rendered_pose_landmarks):
-                    pose_landmarks_for_drawing = rendered_pose_landmarks[frame_idx]
+                    pose_landmarks_for_drawing = None
+                    if draw_pose and frame_idx < len(rendered_pose_landmarks):
+                        pose_landmarks_for_drawing = rendered_pose_landmarks[frame_idx]
 
-                # Draw trajectories up to the current frame using the collected track points.
-                for idx, tp in enumerate(track_point):
-                    history_start = 0
-                    if trajectory_history_frames is not None:
-                        history_start = max(
-                            0, frame_idx + 1 - trajectory_history_frames
-                        )
-
-                    traj = [
-                        p
-                        for p in trajectories[tp][history_start : frame_idx + 1]
-                        if p is not None
-                    ]
-                    traj_3d = [
-                        p
-                        for p in trajectories_3d[tp][history_start : frame_idx + 1]
-                        if p is not None
-                    ]
-                    trajectory_segment_colors = []
-
-                    if len(traj_3d) > 1:
-                        for traj_idx in range(1, len(traj_3d)):
-                            abs_velocity = _compute_abs_velocity(
-                                traj_3d[traj_idx - 1],
-                                traj_3d[traj_idx],
+                    # Draw trajectories up to the current frame using the collected track points.
+                    for idx, tp in enumerate(track_point):
+                        history_start = 0
+                        if trajectory_history_frames is not None:
+                            history_start = max(
+                                0, frame_idx + 1 - trajectory_history_frames
                             )
+
+                        traj = [
+                            p
+                            for p in trajectories[tp][history_start : frame_idx + 1]
+                            if p is not None
+                        ]
+                        traj_3d = [
+                            p
+                            for p in trajectories_3d[tp][history_start : frame_idx + 1]
+                            if p is not None
+                        ]
+                        trajectory_segment_colors = []
+
+                        if len(traj_3d) > 1:
+                            for traj_idx in range(1, len(traj_3d)):
+                                abs_velocity = _compute_abs_velocity(
+                                    traj_3d[traj_idx - 1],
+                                    traj_3d[traj_idx],
+                                )
+                                velocity_ratio = _normalize_speed(
+                                    abs_velocity,
+                                    speed_percentiles[tp],
+                                )
+                                trajectory_segment_colors.append(
+                                    _get_speed_color(velocity_ratio)
+                                )
+
+                        # Draw trajectory if enabled
+                        if show_trajectory:
+                            if overlay_mask:
+                                draw_colored_trajectory(
+                                    overlay_canvas,
+                                    traj,
+                                    trajectory_segment_colors,
+                                    thickness=TRAJECTORY_THICKNESS,
+                                )
+                            else:
+                                draw_colored_trajectory(
+                                    frame,
+                                    traj,
+                                    trajectory_segment_colors,
+                                    thickness=TRAJECTORY_THICKNESS,
+                                )
+
+                        # Draw velocity arrows and optional telemetry.
+                        if len(traj) > 1 and len(traj_3d) > 1:
+                            prev_point = traj[-2]
+                            curr_point = traj[-1]
+                            prev_3d = traj_3d[-2]
+                            curr_3d = traj_3d[-1]
+                            abs_velocity = _compute_abs_velocity(prev_3d, curr_3d)
+
                             velocity_ratio = _normalize_speed(
                                 abs_velocity,
                                 speed_percentiles[tp],
                             )
-                            trajectory_segment_colors.append(
-                                _get_speed_color(velocity_ratio)
-                            )
+                            arrow_color = _get_speed_color(velocity_ratio)
 
-                    # Draw trajectory if enabled
-                    if show_trajectory:
-                        if overlay_mask:
-                            draw_colored_trajectory(
-                                overlay_canvas,
-                                traj,
-                                trajectory_segment_colors,
-                                thickness=TRAJECTORY_THICKNESS,
-                            )
-                        else:
-                            draw_colored_trajectory(
-                                frame,
-                                traj,
-                                trajectory_segment_colors,
-                                thickness=TRAJECTORY_THICKNESS,
-                            )
-
-                    # Draw velocity arrows and optional telemetry.
-                    if len(traj) > 1 and len(traj_3d) > 1:
-                        prev_point = traj[-2]
-                        curr_point = traj[-1]
-                        prev_3d = traj_3d[-2]
-                        curr_3d = traj_3d[-1]
-                        abs_velocity = _compute_abs_velocity(prev_3d, curr_3d)
-
-                        velocity_ratio = _normalize_speed(
-                            abs_velocity,
-                            speed_percentiles[tp],
-                        )
-                        arrow_color = _get_speed_color(velocity_ratio)
-
-                        if show_trajectory:
-                            velocity_arrows.append(
-                                (
-                                    prev_point,
-                                    curr_point,
-                                    arrow_color,
+                            if show_trajectory:
+                                velocity_arrows.append(
+                                    (
+                                        prev_point,
+                                        curr_point,
+                                        arrow_color,
+                                    )
                                 )
-                            )
 
-                        if show_gauges:
-                            telemetry_rows.append(
-                                f"{tp:<16} {abs_velocity:>6.1f} {velocity_ratio:>10.2f}"
-                            )
-                    elif show_gauges:
-                        telemetry_rows.append(f"{tp:<16} {'--':>6} {'--':>10}")
+                            if show_gauges:
+                                telemetry_rows.append(
+                                    f"{tp:<16} {abs_velocity:>6.1f} {velocity_ratio:>10.2f}"
+                                )
+                        elif show_gauges:
+                            telemetry_rows.append(f"{tp:<16} {'--':>6} {'--':>10}")
 
-                if overlay_mask and overlay_canvas is not None:
-                    blended = cv2.addWeighted(
-                        frame, 1 - overlay_opacity, overlay_canvas, overlay_opacity, 0
-                    )
-                    frame = blended
+                    if overlay_mask and overlay_canvas is not None:
+                        blended = cv2.addWeighted(
+                            frame, 1 - overlay_opacity, overlay_canvas, overlay_opacity, 0
+                        )
+                        frame = blended
 
-                for prev_point, curr_point, color in velocity_arrows:
-                    draw_velocity_arrow(
-                        frame,
-                        prev_point,
-                        curr_point,
-                        color,
-                        scale=VELOCITY_ARROW_LENGTH,
-                        thickness=VELOCITY_ARROW_THICKNESS,
-                    )
+                    for prev_point, curr_point, color in velocity_arrows:
+                        draw_velocity_arrow(
+                            frame,
+                            prev_point,
+                            curr_point,
+                            color,
+                            scale=VELOCITY_ARROW_LENGTH,
+                            thickness=VELOCITY_ARROW_THICKNESS,
+                        )
 
-                if show_gauges:
-                    draw_telemetry_panel(frame, telemetry_rows)
+                    if show_gauges:
+                        draw_telemetry_panel(frame, telemetry_rows)
 
-                if draw_pose and pose_landmarks_for_drawing:
-                    draw_pose_landmarks(
-                        frame,
-                        pose_landmarks_for_drawing,
-                        color=pose_color,
-                        thickness=2,
-                    )
+                    if draw_pose and pose_landmarks_for_drawing:
+                        draw_pose_landmarks(
+                            frame,
+                            pose_landmarks_for_drawing,
+                            color=pose_color,
+                            thickness=2,
+                        )
 
-                out.write(frame)
-                frame_idx += 1
-                pbar.update(1)
+                    out.write(frame)
+                    frame_idx += 1
+                    pbar.update(1)
+        else:
+            print("Skipping video rendering because json_only=True")
     finally:
         if pose_detector is not None:
             pose_detector.close()
         cap.release()
-        out.release()
+        if out is not None:
+            out.release()
         cv2.destroyAllWindows()
 
     # Save PNG with just the trajectories if requested
-    if trajectory_png_path is not None:
+    if trajectory_png_path is not None and not json_only:
         # from utils.body_trajectory import save_trajectories_as_png
         save_trajectories_as_png(
             trajectories, width, height, trajectory_png_path, colors=colors

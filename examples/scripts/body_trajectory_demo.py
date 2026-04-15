@@ -30,6 +30,12 @@ def main():
         default=None,
         help="Path to the input video file.",
     )
+    parser.add_argument(
+        "--json_only",
+        action="store_true",
+        default=False,
+        help="Export landmarks and metadata JSON only, without rendering an output video.",
+    )
     args = parser.parse_args()
     if not args.video_path or args.video_path == "":
         print(
@@ -47,6 +53,7 @@ def main():
     cruxes = Cruxes()
     cruxes.body_trajectory(
         target_video_path,
+        json_only=args.json_only,
         # tracking relevant
         track_point=[
             "hip_mid",
