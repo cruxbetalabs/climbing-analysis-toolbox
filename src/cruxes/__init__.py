@@ -2,15 +2,85 @@ from termcolor import colored
 import os
 
 from .utils.file_operations import get_output_path
+from .utils.warp_video import warp_image_to_reference
 from .utils.warp_video import warp_video_with_per_frame_homography
 from .utils.warp_video import warp_video_with_fixed_homography
 from .utils.body_trajectory import extract_pose_and_draw_trajectory
 
 
 class Cruxes:
-    def __init__(self):
-        # Nothing to initialize for now
-        pass
+    def __init__(
+        self,
+        matcher_model_name="superpoint-lightglue",
+        matcher_device="auto",
+    ):
+        self.matcher_model_name = matcher_model_name
+        self.matcher_device = matcher_device
+
+    def set_matcher_model_name(self, matcher_model_name):
+        self.matcher_model_name = matcher_model_name
+        return self.matcher_model_name
+
+    def set_matcher_device(self, matcher_device):
+        self.matcher_device = matcher_device
+        return self.matcher_device
+
+    def _get_default_matcher_device(self):
+        if self.matcher_device not in [None, "auto"]:
+            return self.matcher_device
+
+        import torch
+
+        device = "cpu"
+        try:
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif torch.backends.mps.is_available():
+                device = "mps"
+        except Exception as e:
+            print(
+                colored(
+                    "Warning: Falling back to CPU device selection.",
+                    "red",
+                )
+            )
+            print(f"Error: {e}")
+
+        return device
+
+    def _get_default_matcher(self):
+        from imm import get_matcher
+
+        device = self._get_default_matcher_device()
+
+        return get_matcher(
+            # Available models:
+            # https://github.com/alexstoken/image-matching-models?tab=readme-ov-file#available-models
+            self.matcher_model_name,
+            device=device,
+        )
+
+    def _get_output_image_path(self, target_image_path, output_image_path=None):
+        if output_image_path is None:
+            input_dir = os.path.dirname(target_image_path) or "."
+            file_name = os.path.basename(target_image_path)
+            derived_path = os.path.join(input_dir, f"warped_{file_name}")
+            print(
+                colored(
+                    f"Output image will be saved to {derived_path}",
+                    "green",
+                    attrs=["bold"],
+                )
+            )
+            return derived_path
+
+        output_dir = os.path.dirname(output_image_path)
+        if output_dir and not os.path.exists(output_dir):
+            raise ValueError(
+                f"Output path {output_image_path} does not exist. Please specify a valid path."
+            )
+
+        return output_image_path
 
     def warp_video(
         self,
@@ -40,35 +110,9 @@ class Cruxes:
                         - 'poisson': Poisson/gradient blending (may make foreground transparent)
             feather_amount: Pixels to feather at boundary (default: 10, recommended: 5-15)
         """
-        import torch
-        from imm import get_matcher
-
-        device = "cpu"  # default device, can be set to "mps" for Apple Silicon
-        try:
-            if torch.backends.mps.is_available():
-                device = "mps"
-        except Exception as e:
-            print(
-                colored(
-                    "Warning: MPS backend not available. Using CPU instead.",
-                    "red",
-                )
-            )
-            print(f"Error: {e}")
-
-        matcher = get_matcher(
-            # Available models:
-            # https://github.com/alexstoken/image-matching-models?tab=readme-ov-file#available-models
-            "superpoint-lightglue",  # "superglue",  # "d2-net", "r2d2"
-            device=device,
-        )
-
         reference_image = ref_img
         target_video = src_video_path
         overlay_text = overlay_text
-
-        # extract parent directory from reference_image
-        parent_dir = os.path.dirname(reference_image)
 
         # Check if reference_image and target_video exist
         if not os.path.exists(reference_image):
@@ -77,6 +121,11 @@ class Cruxes:
         if not os.path.exists(target_video):
             print(f"Warning: Target video not found: {target_video}")
             return
+
+        matcher = self._get_default_matcher()
+
+        # extract parent directory from reference_image
+        parent_dir = os.path.dirname(reference_image)
 
         output_prefix = "warped"
         # Derive output video path using get_output_path
@@ -122,6 +171,64 @@ class Cruxes:
                 blend_mode=blend_mode,
                 feather_amount=feather_amount,
             )
+
+    def warp_image(
+        self,
+        ref_img,
+        src_img_path,
+        output_image_path=None,
+        overlay_text=False,
+        text_to_overlay=None,
+        use_gradient_blending=False,
+        blend_mode="edge_feather",
+        feather_amount=15,
+    ):
+        """
+        Warp a target image to align with a reference image.
+
+        Args:
+            ref_img: Path to reference image
+            src_img_path: Path to source image
+            output_image_path: Optional output image path. Defaults to warped_<input_name> in the same folder as src_img_path
+            overlay_text: Whether to overlay text on the warped image
+            text_to_overlay: Optional custom overlay text
+            use_gradient_blending: If True, use advanced blending (deprecated, use blend_mode)
+            blend_mode: Blending mode:
+                        - 'none': Direct masking (fastest, hard edges)
+                        - 'feathered': Full Gaussian alpha blending (may cause shadows)
+                        - 'edge_feather': Distance transform edge blending (recommended, no shadows)
+                        - 'smart': Morphological edge-only blending (very clean)
+                        - 'multiband': Laplacian pyramid blending (high quality, slower)
+                        - 'poisson': Poisson/gradient blending (may make foreground transparent)
+            feather_amount: Pixels to feather at boundary (default: 15)
+        """
+        reference_image = ref_img
+        source_image = src_img_path
+
+        if not os.path.exists(reference_image):
+            print(f"Warning: Reference image not found: {reference_image}")
+            return False
+        if not os.path.exists(source_image):
+            print(f"Warning: Source image not found: {source_image}")
+            return False
+
+        matcher = self._get_default_matcher()
+        output_image_path = self._get_output_image_path(
+            source_image,
+            output_image_path,
+        )
+
+        return warp_image_to_reference(
+            reference_image,
+            source_image,
+            output_image_path,
+            matcher,
+            overlay_text=overlay_text,
+            text_to_overlay=text_to_overlay,
+            use_gradient_blending=use_gradient_blending,
+            blend_mode=blend_mode,
+            feather_amount=feather_amount,
+        )
 
     def body_trajectory(
         self,

@@ -2,6 +2,16 @@ import argparse
 from cruxes import Cruxes
 
 
+BLEND_MODES = [
+    "none",
+    "feathered",
+    "edge_feather",
+    "smart",
+    "multiband",
+    "poisson",
+]
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Cruxes: Climbing Analysis Toolbox CLI"
@@ -20,6 +30,61 @@ def main():
     )
     warp_parser.add_argument(
         "--type", default="dynamic", choices=["dynamic", "fixed"], help="Warp type."
+    )
+
+    """
+    Warp image subcommand
+    """
+    warp_image_parser = subparsers.add_parser(
+        "warp-image", help="Warp an image to match a reference image."
+    )
+    warp_image_parser.add_argument(
+        "--ref_img", required=True, help="Reference image path."
+    )
+    warp_image_parser.add_argument(
+        "--src_img_path",
+        dest="src_img_path",
+        required=True,
+        help="Source image path.",
+    )
+    warp_image_parser.add_argument(
+        "--target_img_path",
+        dest="src_img_path",
+        help=argparse.SUPPRESS,
+    )
+    warp_image_parser.add_argument(
+        "--output_img_path",
+        default=None,
+        help="Optional output image path. Defaults to warped_<input_name> in the same folder as src_img_path.",
+    )
+    warp_image_parser.add_argument(
+        "--overlay_text",
+        action="store_true",
+        default=False,
+        help="Overlay the target image name on the warped output.",
+    )
+    warp_image_parser.add_argument(
+        "--text_to_overlay",
+        default=None,
+        help="Optional custom text to overlay when --overlay_text is enabled.",
+    )
+    warp_image_parser.add_argument(
+        "--blend_mode",
+        default="edge_feather",
+        choices=BLEND_MODES,
+        help="Blending mode for compositing the warped image onto the reference.",
+    )
+    warp_image_parser.add_argument(
+        "--feather_amount",
+        type=int,
+        default=15,
+        help="Feathering width in pixels for supported blend modes.",
+    )
+    warp_image_parser.add_argument(
+        "--use_gradient_blending",
+        action="store_true",
+        default=False,
+        help="Use the legacy Poisson blending path. Prefer --blend_mode poisson.",
     )
 
     """
@@ -150,6 +215,17 @@ def main():
             args.ref_img,
             args.src_video_path,
             warp_type=args.type,
+        )
+    elif args.command == "warp-image":
+        cruxes.warp_image(
+            args.ref_img,
+            args.src_img_path,
+            output_image_path=args.output_img_path,
+            overlay_text=args.overlay_text,
+            text_to_overlay=args.text_to_overlay,
+            use_gradient_blending=args.use_gradient_blending,
+            blend_mode=args.blend_mode,
+            feather_amount=args.feather_amount,
         )
     elif args.command == "body-trajectory":
         if args.kalman_settings is not None:

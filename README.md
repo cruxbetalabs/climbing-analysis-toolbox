@@ -25,6 +25,8 @@ The published package name is `cruxes`, and it installs the `cruxes` CLI.
 
 PyPI: https://pypi.org/project/cruxes/
 
+For image/video warping through the Python API, you can override the underlying matcher model with `Cruxes(matcher_model_name="...")` or `cruxes.set_matcher_model_name("...")`, and you can override the execution device with `Cruxes(matcher_device="...")` or `cruxes.set_matcher_device("...")`. By default, device selection is automatic and prefers `cuda`, then `mps`, then `cpu`. The full matcher catalog lives upstream in vismatch/imm and changes over time, so prefer the upstream docs for the current list rather than copying it into this README.
+
 ## Catalogue
 
 > For each section, there will be detailed example code for both CLI usage and in-code usage.
@@ -37,6 +39,11 @@ cruxes warp \
 --ref_img "examples/videos/warp-dynamic-ref.jpg" \
 --src_video_path "examples/videos/warp-dynamic-input.mp4"
 # [--type ...]
+
+cruxes warp-image \
+--ref_img "examples/videos/warp-dynamic-ref.jpg" \
+--src_img_path "examples/videos/warp-image-input.jpg"
+# [--output_img_path ...]
 ```
 
 2. **Drawing Trajectories for Body Movements** [[1]](https://www.instagram.com/stories/highlights/18047308238255136/) [Details](#2️⃣-drawing-trajectories-for-body-movements)
@@ -89,9 +96,12 @@ cruxes.warp_video(
     "warp-dynamic-ref.jpg", 
     "warp-dynamic-input.mp4",
     # Optional: Advanced blending modes
+    # Optional: matcher override, e.g. Cruxes(matcher_model_name="romav2")
     blend_mode="edge_feather",  # Options: 'none', 'feathered', 'edge_feather', 'smart', 'multiband', 'poisson'
     feather_amount=10,  # Pixels to feather at boundary (default: 10)
 )
+
+cruxes = Cruxes(matcher_model_name="romav2", matcher_device="cpu")
 ```
 
 <details>
@@ -131,6 +141,41 @@ cruxes.warp_video(
 </details>
 
 > If you can't see the example resulting video, go to the [example/videos/](./examples/videos/) folder.
+
+#### Warp a Single Image to the Reference Scene
+
+This uses the same feature matching and homography pipeline as video warping, but applies it once to a still image and writes a composited output image.
+
+```shell
+# CLI usage
+cruxes warp-image \
+--ref_img "examples/videos/warp-fixed-ref.jpg" \
+--src_img_path "examples/videos/warp-image-input.jpg" \
+--output_img_path "examples/videos/warp-image-output.jpg" \
+--blend_mode edge_feather
+```
+
+```python
+# In-code usage
+from cruxes import Cruxes
+
+cruxes = Cruxes()
+cruxes.warp_image(
+    "warp-fixed-ref.jpg",
+    "warp-image-input.jpg",
+    output_image_path="warp-image-output.jpg",
+    blend_mode="edge_feather",
+    feather_amount=15,
+)
+
+cruxes = Cruxes(matcher_model_name="romav2")
+cruxes.warp_image(
+    "warp-fixed-ref.jpg",
+    "warp-image-input.jpg",
+)
+```
+
+Common matcher examples include `superpoint-lightglue`, `romav2`, `tiny-roma`, `ufm`, and `liftfeat`. Common device values are `auto`, `cpu`, `mps`, and `cuda`. For the current full matcher list, check the upstream vismatch documentation: https://github.com/gmberton/vismatch
 
 ---
 
