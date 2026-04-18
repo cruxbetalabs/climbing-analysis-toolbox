@@ -34,7 +34,37 @@ def main():
         "--json_only",
         action="store_true",
         default=False,
-        help="Export landmarks and metadata JSON only, without rendering an output video.",
+        help="Export JSON artifacts only, without rendering an output video. This also enables the separate pose world landmarks export.",
+    )
+    parser.add_argument(
+        "--track_point_visibility_threshold",
+        type=float,
+        default=0.6,
+        help="Minimum visibility required for tracked joints and derived track points.",
+    )
+    parser.add_argument(
+        "--pose_visibility_threshold",
+        type=float,
+        default=0.4,
+        help="Minimum visibility required to render a pose landmark.",
+    )
+    parser.add_argument(
+        "--pose_presence_threshold",
+        type=float,
+        default=0.4,
+        help="Minimum presence required to render a pose landmark.",
+    )
+    parser.add_argument(
+        "--export_world_landmarks",
+        action="store_true",
+        default=False,
+        help="Export MediaPipe pose world landmarks to a separate WebGPU-friendly JSON file.",
+    )
+    parser.add_argument(
+        "--world_landmarks_json_path",
+        type=str,
+        default=None,
+        help="Optional path to the pose world landmarks JSON output.",
     )
     args = parser.parse_args()
     if not args.video_path or args.video_path == "":
@@ -49,6 +79,26 @@ def main():
 
     # Print colored messages for debugging
     print(colored("Target video path:", "blue"), target_video_path)
+    print(
+        colored("Track point visibility threshold:", "blue"),
+        args.track_point_visibility_threshold,
+    )
+    print(
+        colored("Pose visibility threshold:", "blue"),
+        args.pose_visibility_threshold,
+    )
+    print(
+        colored("Pose presence threshold:", "blue"),
+        args.pose_presence_threshold,
+    )
+    print(
+        colored("Export world landmarks:", "blue"),
+        args.export_world_landmarks,
+    )
+    print(
+        colored("World landmarks JSON path:", "blue"),
+        args.world_landmarks_json_path,
+    )
 
     cruxes = Cruxes()
     cruxes.body_trajectory(
@@ -59,8 +109,8 @@ def main():
             "hip_mid",
             "upper_body_center",
             # "head",
-            # "left_hand",
-            # "right_hand",
+            "left_hand",
+            "right_hand",
             "left_foot",
             "right_foot",
         ],
@@ -69,14 +119,14 @@ def main():
         draw_pose=True,
         pose_color=(255, 255, 255),
         show_trajectory=True,
-        show_gauges=True,
-        trajectory_history_seconds=0.5,
+        show_gauges=False,
+        trajectory_history_seconds=0.75,
         use_cached_landmarks=True,
-        use_cached_trajectory_metadata=True,
+        # use_cached_trajectory_metadata=True,
         export_landmarks=True,
-        export_metadata=True,
-        overlay_mask=False,
-        hide_original_video=False,
+        # export_metadata=True,
+        overlay_mask=True,
+        hide_original_video=True,
         kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
             True,  # Set this to false if you don't want to apply Kalman filter
             0.5e0,  # >=1e0 for higher noise, <=1e-1 for lower noise
@@ -88,6 +138,11 @@ def main():
             15,  # Window length (must be odd, typical: 5-15)
             4,  # Polynomial order (typical: 2-4, must be < window_length)
         ],
+        track_point_visibility_threshold=args.track_point_visibility_threshold,
+        pose_visibility_threshold=args.pose_visibility_threshold,
+        pose_presence_threshold=args.pose_presence_threshold,
+        export_world_landmarks=args.export_world_landmarks,
+        world_landmarks_json_path=args.world_landmarks_json_path,
     )
 
 

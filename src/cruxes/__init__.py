@@ -259,6 +259,8 @@ class Cruxes:
         use_cached_landmarks=False,
         export_landmarks=False,
         landmarks_json_path=None,
+        export_world_landmarks=False,
+        world_landmarks_json_path=None,
         use_cached_trajectory_metadata=False,
         export_metadata=False,
         metadata_path=None,
@@ -270,6 +272,9 @@ class Cruxes:
         ],
         trajectory_png_path=None,
         savgol_settings=[False, 11, 3],  # [use_savgol, window_length, polyorder]
+        track_point_visibility_threshold=0.6,
+        pose_visibility_threshold=0.4,
+        pose_presence_threshold=0.4,
     ):
         if overlay_trajectory is not None:
             overlay_mask = overlay_trajectory
@@ -304,6 +309,8 @@ class Cruxes:
             use_cached_landmarks=use_cached_landmarks,
             export_landmarks=export_landmarks,
             landmarks_json_path=landmarks_json_path,
+            export_world_landmarks=export_world_landmarks,
+            world_landmarks_json_path=world_landmarks_json_path,
             use_cached_trajectory_metadata=use_cached_trajectory_metadata,
             export_metadata=export_metadata,
             metadata_path=metadata_path,
@@ -312,6 +319,9 @@ class Cruxes:
             kalman_settings=kalman_settings,
             trajectory_png_path=trajectory_png_path,
             savgol_settings=savgol_settings,
+            track_point_visibility_threshold=track_point_visibility_threshold,
+            pose_visibility_threshold=pose_visibility_threshold,
+            pose_presence_threshold=pose_presence_threshold,
         )
 
     def compare_trajectories(

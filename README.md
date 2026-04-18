@@ -190,7 +190,7 @@ There is a couple of settings you can adjust inside the script for `extract_pose
 | Argument | Description | 
 | - | - |
 | `track_point`  | Points of interest on the estimated pose you want to track. A velocity vector arrow will be drawn to indicate how fast each point is moving with respect to its 3D position |
-| `json_only`  | Export landmarks and metadata JSON only. This skips rendered video and PNG outputs and forces both JSON exports on |
+| `json_only`  | Export JSON artifacts only. This skips rendered video and PNG outputs and forces landmarks, metadata, and pose world landmarks JSON exports on |
 | `trajectory_only`  | Render only the trajectory on a black background. This disables pose drawing and telemetry, forces trajectory drawing on, and prefers cached trajectory metadata if available |
 | `overlay_mask`  | Whether to overlay a half-transparent mask on top of the original video. |
 | `hide_original_video`  | Whether to use a black background instead of the original video (useful for creating clean trajectory visualizations) |
@@ -202,14 +202,21 @@ There is a couple of settings you can adjust inside the script for `extract_pose
 | `use_cached_landmarks`  | Whether to reuse a matching landmarks JSON cache instead of recomputing pose landmarks |
 | `export_landmarks`  | Whether to save the collected pose landmarks to JSON after detection |
 | `landmarks_json_path`  | Optional cache file path. Defaults to `<video_stem>_landmarks.json` next to the input video |
+| `export_world_landmarks`  | Whether to export MediaPipe pose world landmarks to a separate WebGPU-friendly JSON file |
+| `world_landmarks_json_path`  | Optional output path for the pose world landmarks JSON. Defaults to `<video_stem>_pose_world_landmarks.json` next to the input video |
 | `use_cached_trajectory_metadata`  | Whether to reuse a matching trajectory metadata JSON file as the trajectory source. This does not force drawing on by itself; `show_trajectory` still controls rendering |
 | `export_metadata`  | Whether to export unified frontend-facing metadata JSON, including per-sample displacement and per-second velocity vectors, per-frame pose landmarks, and explicit skeleton connections when pose data is available |
 | `metadata_path`  | Optional output path for the metadata JSON. Defaults to `<video_stem>_trajectory_metadata.json` next to the input video |
 | `kalman_settings`  | Whether to apply Kalman filter to smooth out the trajectory (not the pose itself) |
 | `savgol_settings`  | Whether to apply Savitzky-Golay filter to smooth the pose skeleton: `[use_savgol, window_length, polyorder]` |
 | `trajectory_png_path`  | Optional output path for a `.png` export of the trajectory on a black background |
+| `track_point_visibility_threshold`  | Minimum landmark visibility required when building tracked joints and derived points like `hip_mid` and `upper_body_center` |
+| `pose_visibility_threshold`  | Minimum landmark visibility required to render a pose landmark in the skeleton overlay |
+| `pose_presence_threshold`  | Minimum landmark presence required to render a pose landmark in the skeleton overlay |
 
 For CLI usage, `--show_trajectory` is required in the normal overlay mode. If you use `--trajectory_only`, trajectory drawing is enabled automatically. If you use `--json_only`, rendering flags are ignored and only the JSON artifacts are written.
+
+The dedicated pose world landmarks file is intended for 3D playback workflows such as the WebGPU sample player in the `webgpu-samples` repository. It contains the raw 33-landmark MediaPipe world coordinates in meters, rooted at the hip midpoint, plus a rough cumulative `x/y` root-translation estimate derived from hip motion in the video. The WebGPU player can toggle that estimate on or off.
 
 `--savgol_settings` is currently available in the Python API example below, not in the CLI.
 
@@ -228,12 +235,17 @@ cruxes body-trajectory \
 --use_cached_landmarks \
 --use_cached_trajectory_metadata \
 --export_landmarks \
+--export_world_landmarks \
 --export_metadata \
 --json_only \
---kalman_settings 1e0
+--kalman_settings 1e0 \
+--track_point_visibility_threshold 0.6 \
+--pose_visibility_threshold 0.4 \
+--pose_presence_threshold 0.4
 # Additional options:
 # --hide_original_video  # Use black background
 # --metadata_path ./my_metadata.json
+# --world_landmarks_json_path ./my_pose_world_landmarks.json
 # In trajectory_only mode, pose drawing and telemetry are disabled automatically.
 ```
 
@@ -253,7 +265,7 @@ cruxes.body_trajectory(
         "left_foot",
         "right_foot",
     ],
-    json_only=False,  # Set True to export landmarks/metadata JSON only
+    json_only=False,  # Set True to export JSON artifacts only
     trajectory_only=False,  # Set True for black-background trajectory-only output
     overlay_mask=False,
     hide_original_video=False,
@@ -265,6 +277,7 @@ cruxes.body_trajectory(
     use_cached_landmarks=True,  # Reuse a matching landmarks cache if present
     use_cached_trajectory_metadata=True,  # Reuse trajectory metadata for trajectory rendering if present
     export_landmarks=True,  # Save computed landmarks for later experimentation
+    export_world_landmarks=True,  # Export a separate WebGPU-friendly pose world landmarks JSON
     export_metadata=True,  # Export unified frontend-facing metadata JSON
     kalman_settings=[  # Kalman filter settings: [use_kalman : bool, kalman_gain : float]
         True,  # Set this to false if you don't want to apply Kalman filter
@@ -275,9 +288,15 @@ cruxes.body_trajectory(
         15,  # Window length (must be odd, typical: 5-15)
         4,  # Polynomial order (typical: 2-4, must be < window_length)
     ],
+    track_point_visibility_threshold=0.6,
+    pose_visibility_threshold=0.4,
+    pose_presence_threshold=0.4,
+    world_landmarks_json_path=None,
     trajectory_png_path=None,
 )
 ```
+
+To preview the exported 3D pose in WebGPU, generate `*_pose_world_landmarks.json` and then load it in the `poseWorldLandmarksPlayer` sample inside the sibling `webgpu-samples` repository.
 
 The generated video will be saved in the same directory as your input video with a `pose_trajectory_` prefix.
 

@@ -10,6 +10,7 @@ from .file_operations import (
     get_landmarks_json_path,
     get_output_path,
     get_trajectory_metadata_path,
+    get_world_landmarks_json_path,
 )
 from .draw_helpers import (
     draw_colored_trajectory,
@@ -18,10 +19,13 @@ from .draw_helpers import (
 )
 from .pose_helpers import get_track_point_coords
 from .pose_backend import (
+    PRESENCE_THRESHOLD,
     POSE_CONNECTIONS,
     PoseDetector,
     PoseLandmark,
     NormalizedPoseLandmark,
+    VISIBILITY_THRESHOLD,
+    WorldPoseLandmark,
     draw_pose_landmarks,
 )
 
@@ -74,7 +78,10 @@ TRAJECTORY_THICKNESS = 5
 VELOCITY_ARROW_LENGTH = 40
 VELOCITY_ARROW_THICKNESS = 5
 TRAJECTORY_METADATA_SCHEMA_VERSION = "1.0"
+WORLD_LANDMARKS_SCHEMA_VERSION = "1.0"
 DEFAULT_VELOCITY_COLOR_PRESET = "ice_blue_candle"
+DEFAULT_TRACK_POINT_VISIBILITY_THRESHOLD = 0.6
+ROOT_TRANSLATION_CONFIDENCE_THRESHOLD = 0.3
 
 
 def _serialize_landmarks(landmarks):
@@ -93,12 +100,12 @@ def _serialize_landmarks(landmarks):
     ]
 
 
-def _deserialize_landmarks(serialized_landmarks):
+def _deserialize_landmarks(serialized_landmarks, landmark_cls=NormalizedPoseLandmark):
     if serialized_landmarks is None:
         return None
 
     return [
-        NormalizedPoseLandmark(
+        landmark_cls(
             x=landmark["x"],
             y=landmark["y"],
             z=landmark["z"],
@@ -115,14 +122,20 @@ def _append_track_points(
     track_point,
     landmarks,
     frame_shape,
+    track_point_visibility_threshold,
     use_kalman,
     kalman_filters,
 ):
     if landmarks:
         h, w = frame_shape[:2]
         for tp in track_point:
-            confidence_threshold = 0.6
-            result = get_track_point_coords(tp, landmarks, w, h, confidence_threshold)
+            result = get_track_point_coords(
+                tp,
+                landmarks,
+                w,
+                h,
+                track_point_visibility_threshold,
+            )
             if result is None:
                 trajectories[tp].append(None)
                 trajectories_3d[tp].append(None)
@@ -317,6 +330,333 @@ def _build_pose_metadata(
             }
             for frame_idx, landmarks in enumerate(rendered_pose_landmarks)
         ],
+    }
+
+
+def _serialize_world_landmarks_for_export(landmarks):
+    if landmarks is None:
+        return None
+
+    positions = []
+    visibility = []
+    presence = []
+    for landmark in landmarks:
+        positions.extend([float(landmark.x), float(landmark.y), float(landmark.z)])
+        visibility.append(
+            None if landmark.visibility is None else float(landmark.visibility)
+        )
+        presence.append(None if landmark.presence is None else float(landmark.presence))
+
+    return {
+        "positions": positions,
+        "visibility": visibility,
+        "presence": presence,
+    }
+
+
+def _build_world_landmarks_export(
+    video_path,
+    source_video_metadata,
+    rendered_pose_landmarks,
+    world_pose_landmarks,
+    effective_fps,
+    width,
+    height,
+):
+    root_translation_estimate = _build_root_translation_estimate(
+        rendered_pose_landmarks,
+        world_pose_landmarks,
+        effective_fps,
+        width,
+        height,
+    )
+
+    frames = []
+    for frame_idx, landmarks in enumerate(world_pose_landmarks):
+        frame_payload = {
+            "frame_index": frame_idx,
+            "timestamp_seconds": float(frame_idx / effective_fps),
+            "landmarks": _serialize_world_landmarks_for_export(landmarks),
+        }
+        if frame_idx < len(root_translation_estimate["frames"]):
+            frame_payload["root_translation"] = root_translation_estimate["frames"][
+                frame_idx
+            ]["translation"]
+        frames.append(frame_payload)
+
+    return {
+        "schema_version": WORLD_LANDMARKS_SCHEMA_VERSION,
+        "format": "cruxes_pose_world_landmarks_webgpu",
+        "source_video": {
+            **source_video_metadata,
+            "source_path": os.path.abspath(video_path),
+        },
+        "landmark_model": "mediapipe_pose_33",
+        "landmark_count": len(PoseLandmark),
+        "landmark_names": [landmark.name.lower() for landmark in PoseLandmark],
+        "coordinate_space": {
+            "type": "mediapipe_world_landmarks",
+            "unit": "meters",
+            "origin": "midpoint_of_hips",
+            "notes": "Raw MediaPipe pose world landmarks.",
+        },
+        "root_translation_estimate": root_translation_estimate,
+        "skeleton_connections": [list(connection) for connection in POSE_CONNECTIONS],
+        "frames": frames,
+    }
+
+
+def _save_world_landmarks_export(export_path, world_landmarks_payload):
+    with open(export_path, "w", encoding="utf-8") as file_obj:
+        json.dump(world_landmarks_payload, file_obj, indent=2)
+
+
+def _is_landmark_confident(
+    landmark,
+    confidence_threshold=ROOT_TRANSLATION_CONFIDENCE_THRESHOLD,
+):
+    if landmark is None:
+        return False
+
+    visibility = getattr(landmark, "visibility", None)
+    presence = getattr(landmark, "presence", None)
+
+    if visibility is not None and visibility < confidence_threshold:
+        return False
+    if presence is not None and presence < confidence_threshold:
+        return False
+
+    return True
+
+
+def _get_pose_landmark_pixel_point(landmarks, landmark_index, width, height):
+    if landmarks is None or landmark_index >= len(landmarks):
+        return None
+
+    landmark = landmarks[landmark_index]
+    if not _is_landmark_confident(landmark):
+        return None
+
+    return (float(landmark.x * width), float(landmark.y * height))
+
+
+def _get_world_landmark_point(landmarks, landmark_index):
+    if landmarks is None or landmark_index >= len(landmarks):
+        return None
+
+    landmark = landmarks[landmark_index]
+    if not _is_landmark_confident(landmark):
+        return None
+
+    return (float(landmark.x), float(landmark.y), float(landmark.z))
+
+
+def _midpoint(point_a, point_b):
+    if point_a is None or point_b is None:
+        return None
+
+    return tuple((point_a[idx] + point_b[idx]) / 2.0 for idx in range(len(point_a)))
+
+
+def _distance(point_a, point_b):
+    if point_a is None or point_b is None:
+        return None
+
+    return float(
+        np.sqrt(sum((point_a[idx] - point_b[idx]) ** 2 for idx in range(len(point_a))))
+    )
+
+
+def _estimate_frame_meters_per_pixel(
+    pose_landmarks,
+    world_pose_landmarks,
+    width,
+    height,
+):
+    left_shoulder_px = _get_pose_landmark_pixel_point(
+        pose_landmarks,
+        PoseLandmark.LEFT_SHOULDER,
+        width,
+        height,
+    )
+    right_shoulder_px = _get_pose_landmark_pixel_point(
+        pose_landmarks,
+        PoseLandmark.RIGHT_SHOULDER,
+        width,
+        height,
+    )
+    left_hip_px = _get_pose_landmark_pixel_point(
+        pose_landmarks,
+        PoseLandmark.LEFT_HIP,
+        width,
+        height,
+    )
+    right_hip_px = _get_pose_landmark_pixel_point(
+        pose_landmarks,
+        PoseLandmark.RIGHT_HIP,
+        width,
+        height,
+    )
+
+    left_shoulder_world = _get_world_landmark_point(
+        world_pose_landmarks,
+        PoseLandmark.LEFT_SHOULDER,
+    )
+    right_shoulder_world = _get_world_landmark_point(
+        world_pose_landmarks,
+        PoseLandmark.RIGHT_SHOULDER,
+    )
+    left_hip_world = _get_world_landmark_point(
+        world_pose_landmarks,
+        PoseLandmark.LEFT_HIP,
+    )
+    right_hip_world = _get_world_landmark_point(
+        world_pose_landmarks,
+        PoseLandmark.RIGHT_HIP,
+    )
+
+    shoulder_mid_px = _midpoint(left_shoulder_px, right_shoulder_px)
+    hip_mid_px = _midpoint(left_hip_px, right_hip_px)
+    shoulder_mid_world = _midpoint(left_shoulder_world, right_shoulder_world)
+    hip_mid_world = _midpoint(left_hip_world, right_hip_world)
+
+    scale_ratios = []
+    measurement_pairs = [
+        (
+            _distance(left_shoulder_px, right_shoulder_px),
+            _distance(left_shoulder_world, right_shoulder_world),
+        ),
+        (
+            _distance(left_hip_px, right_hip_px),
+            _distance(left_hip_world, right_hip_world),
+        ),
+        (
+            _distance(shoulder_mid_px, hip_mid_px),
+            _distance(shoulder_mid_world, hip_mid_world),
+        ),
+    ]
+
+    for pixel_distance, world_distance in measurement_pairs:
+        if (
+            pixel_distance is not None
+            and pixel_distance > 1e-6
+            and world_distance is not None
+            and world_distance > 1e-6
+        ):
+            scale_ratios.append(world_distance / pixel_distance)
+
+    if not scale_ratios:
+        return hip_mid_px, None
+
+    return hip_mid_px, float(np.median(scale_ratios))
+
+
+def _estimate_root_translation_axis_signs(world_pose_landmarks):
+    x_directions = []
+    y_directions = []
+
+    for frame_landmarks in world_pose_landmarks:
+        left_shoulder = _get_world_landmark_point(
+            frame_landmarks,
+            PoseLandmark.LEFT_SHOULDER,
+        )
+        right_shoulder = _get_world_landmark_point(
+            frame_landmarks,
+            PoseLandmark.RIGHT_SHOULDER,
+        )
+        left_hip = _get_world_landmark_point(frame_landmarks, PoseLandmark.LEFT_HIP)
+        right_hip = _get_world_landmark_point(
+            frame_landmarks,
+            PoseLandmark.RIGHT_HIP,
+        )
+
+        if left_shoulder is not None and right_shoulder is not None:
+            x_delta = right_shoulder[0] - left_shoulder[0]
+            if abs(x_delta) > 1e-6:
+                x_directions.append(np.sign(x_delta))
+
+        shoulder_mid = _midpoint(left_shoulder, right_shoulder)
+        hip_mid = _midpoint(left_hip, right_hip)
+        if shoulder_mid is not None and hip_mid is not None:
+            y_delta = hip_mid[1] - shoulder_mid[1]
+            if abs(y_delta) > 1e-6:
+                y_directions.append(np.sign(y_delta))
+
+    x_sign = 1.0 if not x_directions or np.mean(x_directions) >= 0 else -1.0
+    y_sign = 1.0 if not y_directions or np.mean(y_directions) >= 0 else -1.0
+    return x_sign, y_sign
+
+
+def _build_root_translation_estimate(
+    rendered_pose_landmarks,
+    world_pose_landmarks,
+    effective_fps,
+    width,
+    height,
+):
+    x_sign, y_sign = _estimate_root_translation_axis_signs(world_pose_landmarks)
+
+    previous_root_px = None
+    previous_meters_per_pixel = None
+    cumulative_translation_x = 0.0
+    cumulative_translation_y = 0.0
+    frame_estimates = []
+
+    for frame_idx, (pose_landmarks, world_landmarks) in enumerate(
+        zip(rendered_pose_landmarks, world_pose_landmarks)
+    ):
+        hip_mid_px, meters_per_pixel = _estimate_frame_meters_per_pixel(
+            pose_landmarks,
+            world_landmarks,
+            width,
+            height,
+        )
+        updated = False
+
+        if hip_mid_px is not None and meters_per_pixel is not None:
+            if previous_root_px is not None and previous_meters_per_pixel is not None:
+                average_scale = (previous_meters_per_pixel + meters_per_pixel) / 2.0
+                cumulative_translation_x += (
+                    (hip_mid_px[0] - previous_root_px[0]) * average_scale * x_sign
+                )
+                cumulative_translation_y += (
+                    (hip_mid_px[1] - previous_root_px[1]) * average_scale * y_sign
+                )
+            previous_root_px = hip_mid_px
+            previous_meters_per_pixel = meters_per_pixel
+            updated = True
+
+        frame_estimates.append(
+            {
+                "frame_index": frame_idx,
+                "timestamp_seconds": float(frame_idx / effective_fps),
+                "translation": {
+                    "x": float(cumulative_translation_x),
+                    "y": float(cumulative_translation_y),
+                    "z": 0.0,
+                },
+                "hip_mid_pixel": _serialize_point_2d(hip_mid_px),
+                "meters_per_pixel": (
+                    None if meters_per_pixel is None else float(meters_per_pixel)
+                ),
+                "updated": updated,
+            }
+        )
+
+    return {
+        "method": "weak_perspective_xy_from_hip_mid",
+        "notes": (
+            "Cumulative x/y translation estimated from hip midpoint image motion "
+            "scaled by observed torso size. z remains zero."
+        ),
+        "coordinate_space": {
+            "unit": "meters",
+            "origin": "first_valid_frame",
+            "x_axis_sign": int(x_sign),
+            "y_axis_sign": int(y_sign),
+            "z_axis": "zero_only",
+        },
+        "frames": frame_estimates,
     }
 
 
@@ -628,11 +968,17 @@ def _load_trajectory_metadata(
     }, None
 
 
-def _save_landmarks_cache(cache_path, metadata, all_pose_landmarks):
+def _save_landmarks_cache(
+    cache_path, metadata, all_pose_landmarks, all_world_pose_landmarks=None
+):
     cache_payload = {
         **metadata,
         "frames": [_serialize_landmarks(landmarks) for landmarks in all_pose_landmarks],
     }
+    if all_world_pose_landmarks is not None:
+        cache_payload["world_frames"] = [
+            _serialize_landmarks(landmarks) for landmarks in all_world_pose_landmarks
+        ]
     with open(cache_path, "w", encoding="utf-8") as file_obj:
         json.dump(cache_payload, file_obj)
 
@@ -656,6 +1002,7 @@ def _load_landmarks_cache(
 
     video_metadata = cache_payload.get("video", {})
     frames_payload = cache_payload.get("frames")
+    world_frames_payload = cache_payload.get("world_frames")
     if not isinstance(frames_payload, list):
         return None, "cache does not contain frame landmarks"
 
@@ -681,9 +1028,25 @@ def _load_landmarks_cache(
     if len(frames_payload) != total_frames:
         return None, "cache frame count does not match the video"
 
-    return [
-        _deserialize_landmarks(frame_landmarks) for frame_landmarks in frames_payload
-    ], None
+    if world_frames_payload is not None:
+        if not isinstance(world_frames_payload, list):
+            return None, "cache world frame format is unsupported"
+        if len(world_frames_payload) != total_frames:
+            return None, "cache world frame count does not match the video"
+        world_pose_landmarks = [
+            _deserialize_landmarks(frame_landmarks, landmark_cls=WorldPoseLandmark)
+            for frame_landmarks in world_frames_payload
+        ]
+    else:
+        world_pose_landmarks = None
+
+    return {
+        "pose_landmarks": [
+            _deserialize_landmarks(frame_landmarks)
+            for frame_landmarks in frames_payload
+        ],
+        "world_pose_landmarks": world_pose_landmarks,
+    }, None
 
 
 def _compute_abs_velocity(prev_point_3d, curr_point_3d):
@@ -710,8 +1073,8 @@ def _compute_speed_percentiles(trajectories_3d):
             _compute_abs_velocity(valid_points[idx - 1], valid_points[idx])
             for idx in range(1, len(valid_points))
         ]
-        low = float(np.percentile(speeds, 10))
-        high = float(np.percentile(speeds, 90))
+        low = float(np.percentile(speeds, 20))
+        high = float(np.percentile(speeds, 80))
         if high <= low:
             high = low + 1.0
 
@@ -754,6 +1117,11 @@ def _get_speed_color(normalized_speed):
     )
 
 
+def _validate_probability_threshold(name, value):
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{name} must be between 0.0 and 1.0")
+
+
 def extract_pose_and_draw_trajectory(
     video_path,
     output_path=None,  # optional, if not provided, the output video will be saved in the `output` folder
@@ -776,6 +1144,8 @@ def extract_pose_and_draw_trajectory(
     use_cached_landmarks=False,
     export_landmarks=False,
     landmarks_json_path=None,
+    export_world_landmarks=False,
+    world_landmarks_json_path=None,
     use_cached_trajectory_metadata=False,
     export_metadata=False,
     metadata_path=None,
@@ -784,6 +1154,9 @@ def extract_pose_and_draw_trajectory(
     kalman_settings=[True, 1e-1],  # [use_kalman, measurement_variance]
     trajectory_png_path=None,  # NEW: optional PNG output path
     savgol_settings=[False, 11, 3],  # [use_savgol, window_length, polyorder]
+    track_point_visibility_threshold=DEFAULT_TRACK_POINT_VISIBILITY_THRESHOLD,
+    pose_visibility_threshold=VISIBILITY_THRESHOLD,
+    pose_presence_threshold=PRESENCE_THRESHOLD,
 ):
     # Suppress MediaPipe warnings
     os.environ["GLOG_minloglevel"] = "2"
@@ -794,6 +1167,7 @@ def extract_pose_and_draw_trajectory(
     if json_only:
         export_landmarks = True
         export_metadata = True
+        export_world_landmarks = True
 
     if trajectory_only:
         hide_original_video = True
@@ -808,10 +1182,30 @@ def extract_pose_and_draw_trajectory(
     if metadata_path is None and trajectory_metadata_path is not None:
         metadata_path = trajectory_metadata_path
 
+    _validate_probability_threshold(
+        "track_point_visibility_threshold",
+        track_point_visibility_threshold,
+    )
+    _validate_probability_threshold(
+        "pose_visibility_threshold",
+        pose_visibility_threshold,
+    )
+    _validate_probability_threshold(
+        "pose_presence_threshold",
+        pose_presence_threshold,
+    )
+
     landmarks_cache_path = None
     if use_cached_landmarks or export_landmarks:
         landmarks_cache_path = get_landmarks_json_path(
             video_path, landmarks_json_path=landmarks_json_path
+        )
+
+    world_landmarks_export_path = None
+    if export_world_landmarks:
+        world_landmarks_export_path = get_world_landmarks_json_path(
+            video_path,
+            world_landmarks_json_path=world_landmarks_json_path,
         )
 
     trajectory_export_path = None
@@ -896,6 +1290,7 @@ def extract_pose_and_draw_trajectory(
     # First pass: read frames and either collect or load pose landmarks.
     frames_data = []  # Store frame data for second pass when video rendering is enabled
     all_pose_landmarks = []  # Store all pose landmarks for smoothing
+    all_world_pose_landmarks = []
 
     # Get total frame count for progress bar
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -908,6 +1303,7 @@ def extract_pose_and_draw_trajectory(
     )
 
     cached_pose_landmarks = None
+    cached_world_pose_landmarks = None
     if (
         use_cached_trajectory_metadata
         and trajectory_cache_path
@@ -941,7 +1337,7 @@ def extract_pose_and_draw_trajectory(
         and landmarks_cache_path
         and os.path.exists(landmarks_cache_path)
     ):
-        cached_pose_landmarks, cache_error = _load_landmarks_cache(
+        cached_landmarks_payload, cache_error = _load_landmarks_cache(
             landmarks_cache_path,
             video_path,
             total_frames,
@@ -949,7 +1345,11 @@ def extract_pose_and_draw_trajectory(
             width,
             height,
         )
-        if cached_pose_landmarks is not None:
+        if cached_landmarks_payload is not None:
+            cached_pose_landmarks = cached_landmarks_payload["pose_landmarks"]
+            cached_world_pose_landmarks = cached_landmarks_payload[
+                "world_pose_landmarks"
+            ]
             print(f"Using cached landmarks from {landmarks_cache_path}")
         else:
             print(
@@ -959,6 +1359,10 @@ def extract_pose_and_draw_trajectory(
         print(
             f"Landmarks cache not found at {landmarks_cache_path}. Recomputing landmarks..."
         )
+
+    needs_world_pose_detection = (
+        export_world_landmarks and cached_world_pose_landmarks is None
+    )
 
     first_pass_desc = "Collecting landmarks"
     if cached_pose_landmarks is not None and cached_trajectory_payload is not None:
@@ -974,10 +1378,11 @@ def extract_pose_and_draw_trajectory(
         print("First pass - collecting landmarks...")
 
     try:
-        if cached_pose_landmarks is None and (
+        if (cached_pose_landmarks is None or needs_world_pose_detection) and (
             draw_pose
             or cached_trajectory_payload is None
             or export_landmarks
+            or export_world_landmarks
             or export_metadata
         ):
             pose_detector = PoseDetector()
@@ -991,16 +1396,29 @@ def extract_pose_and_draw_trajectory(
                 if render_video:
                     frames_data.append(frame.copy())
 
+                detector_result = None
+                if pose_detector is not None:
+                    timestamp_ms = int(frame_number * 1000 / effective_fps)
+                    detector_result = pose_detector.process(
+                        frame, timestamp_ms=timestamp_ms
+                    )
+
                 if cached_pose_landmarks is not None:
                     landmarks = cached_pose_landmarks[frame_number - 1]
-                elif pose_detector is not None:
-                    timestamp_ms = int(frame_number * 1000 / effective_fps)
-                    results = pose_detector.process(frame, timestamp_ms=timestamp_ms)
-                    landmarks = results.pose_landmarks
+                elif detector_result is not None:
+                    landmarks = detector_result.pose_landmarks
                 else:
                     landmarks = None
 
+                if cached_world_pose_landmarks is not None:
+                    world_landmarks = cached_world_pose_landmarks[frame_number - 1]
+                elif detector_result is not None:
+                    world_landmarks = detector_result.world_pose_landmarks
+                else:
+                    world_landmarks = None
+
                 all_pose_landmarks.append(landmarks)
+                all_world_pose_landmarks.append(world_landmarks)
                 if cached_trajectory_payload is None:
                     _append_track_points(
                         trajectories,
@@ -1008,6 +1426,7 @@ def extract_pose_and_draw_trajectory(
                         track_point,
                         landmarks,
                         frame.shape,
+                        track_point_visibility_threshold,
                         use_kalman,
                         kalman_filters,
                     )
@@ -1023,6 +1442,7 @@ def extract_pose_and_draw_trajectory(
                 landmarks_cache_path,
                 landmarks_cache_metadata,
                 all_pose_landmarks,
+                all_world_pose_landmarks,
             )
             print(f"Saved landmarks cache to {landmarks_cache_path}")
 
@@ -1107,6 +1527,27 @@ def extract_pose_and_draw_trajectory(
             _save_trajectory_metadata(trajectory_export_path, trajectory_metadata)
             print(f"Saved trajectory metadata to {trajectory_export_path}")
 
+        if export_world_landmarks and world_landmarks_export_path is not None:
+            if any(landmarks is not None for landmarks in all_world_pose_landmarks):
+                world_landmarks_payload = _build_world_landmarks_export(
+                    video_path,
+                    landmarks_cache_metadata["video"],
+                    rendered_pose_landmarks,
+                    all_world_pose_landmarks,
+                    effective_fps,
+                    width,
+                    height,
+                )
+                _save_world_landmarks_export(
+                    world_landmarks_export_path,
+                    world_landmarks_payload,
+                )
+                print(f"Saved pose world landmarks to {world_landmarks_export_path}")
+            else:
+                print(
+                    "Pose world landmark export was requested, but MediaPipe did not provide world landmark data."
+                )
+
         if render_video:
             print(
                 "Second pass - rendering video with raw trajectories and "
@@ -1114,7 +1555,9 @@ def extract_pose_and_draw_trajectory(
             )
             frame_idx = 0
 
-            with tqdm(total=len(frames_data), desc="Rendering video", unit="frame") as pbar:
+            with tqdm(
+                total=len(frames_data), desc="Rendering video", unit="frame"
+            ) as pbar:
                 for frame in frames_data:
                     if hide_original_video:
                         frame = np.zeros_like(frame)
@@ -1123,7 +1566,10 @@ def extract_pose_and_draw_trajectory(
                     telemetry_rows = []
 
                     if overlay_mask:
-                        if overlay_canvas is None or trajectory_history_frames is not None:
+                        if (
+                            overlay_canvas is None
+                            or trajectory_history_frames is not None
+                        ):
                             overlay_canvas = np.zeros_like(frame)
                             overlay_canvas[:] = (0, 0, 0)
 
@@ -1214,7 +1660,11 @@ def extract_pose_and_draw_trajectory(
 
                     if overlay_mask and overlay_canvas is not None:
                         blended = cv2.addWeighted(
-                            frame, 1 - overlay_opacity, overlay_canvas, overlay_opacity, 0
+                            frame,
+                            1 - overlay_opacity,
+                            overlay_canvas,
+                            overlay_opacity,
+                            0,
                         )
                         frame = blended
 
@@ -1237,6 +1687,8 @@ def extract_pose_and_draw_trajectory(
                             pose_landmarks_for_drawing,
                             color=pose_color,
                             thickness=2,
+                            visibility_threshold=pose_visibility_threshold,
+                            presence_threshold=pose_presence_threshold,
                         )
 
                     out.write(frame)

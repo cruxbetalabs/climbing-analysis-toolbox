@@ -1,5 +1,7 @@
 import argparse
 from cruxes import Cruxes
+from cruxes.utils.body_trajectory import DEFAULT_TRACK_POINT_VISIBILITY_THRESHOLD
+from cruxes.utils.pose_backend import PRESENCE_THRESHOLD, VISIBILITY_THRESHOLD
 
 
 BLEND_MODES = [
@@ -110,7 +112,7 @@ def main():
         "--json_only",
         action="store_true",
         default=False,
-        help="Export landmarks and metadata JSON only, without writing a rendered video.",
+        help="Export JSON artifacts only, without writing a rendered video. This also enables the separate pose world landmarks export.",
     )
     body_parser.add_argument(
         "--overlay_mask",
@@ -168,6 +170,17 @@ def main():
         help="Optional path to the landmarks JSON cache. Defaults to <video_stem>_landmarks.json next to the input video.",
     )
     body_parser.add_argument(
+        "--export_world_landmarks",
+        action="store_true",
+        default=False,
+        help="Export MediaPipe pose world landmarks to a separate WebGPU-friendly JSON file.",
+    )
+    body_parser.add_argument(
+        "--world_landmarks_json_path",
+        default=None,
+        help="Optional path to the pose world landmarks JSON file. Defaults to <video_stem>_pose_world_landmarks.json next to the input video.",
+    )
+    body_parser.add_argument(
         "--use_cached_trajectory_metadata",
         action="store_true",
         default=False,
@@ -205,6 +218,24 @@ def main():
     )
     body_parser.add_argument(
         "--trajectory_png_path", default=None, help="Output PNG path for trajectory."
+    )
+    body_parser.add_argument(
+        "--track_point_visibility_threshold",
+        type=float,
+        default=DEFAULT_TRACK_POINT_VISIBILITY_THRESHOLD,
+        help="Minimum visibility required for tracked joints and derived track points.",
+    )
+    body_parser.add_argument(
+        "--pose_visibility_threshold",
+        type=float,
+        default=VISIBILITY_THRESHOLD,
+        help="Minimum visibility required to render a pose landmark.",
+    )
+    body_parser.add_argument(
+        "--pose_presence_threshold",
+        type=float,
+        default=PRESENCE_THRESHOLD,
+        help="Minimum presence required to render a pose landmark.",
     )
 
     args = parser.parse_args()
@@ -249,6 +280,8 @@ def main():
             use_cached_landmarks=args.use_cached_landmarks,
             export_landmarks=args.export_landmarks,
             landmarks_json_path=args.landmarks_json_path,
+            export_world_landmarks=args.export_world_landmarks,
+            world_landmarks_json_path=args.world_landmarks_json_path,
             use_cached_trajectory_metadata=args.use_cached_trajectory_metadata,
             export_metadata=export_metadata,
             metadata_path=metadata_path,
@@ -256,6 +289,9 @@ def main():
             trajectory_metadata_path=args.trajectory_metadata_path,
             kalman_settings=kalman_settings,
             trajectory_png_path=args.trajectory_png_path,
+            track_point_visibility_threshold=args.track_point_visibility_threshold,
+            pose_visibility_threshold=args.pose_visibility_threshold,
+            pose_presence_threshold=args.pose_presence_threshold,
         )
 
 
