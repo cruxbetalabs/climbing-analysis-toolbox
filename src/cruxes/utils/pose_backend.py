@@ -19,8 +19,8 @@ DEFAULT_POSE_MODEL_URL = (
 DEFAULT_POSE_MODEL_PATH = (
     Path.home() / ".cache" / "cruxes" / "mediapipe" / "pose_landmarker_full.task"
 )
-VISIBILITY_THRESHOLD = 0.5
-PRESENCE_THRESHOLD = 0.5
+VISIBILITY_THRESHOLD = 0.4
+PRESENCE_THRESHOLD = 0.4
 
 
 class PoseLandmark(IntEnum):
@@ -118,8 +118,28 @@ class NormalizedPoseLandmark:
 
 
 @dataclass
+class WorldPoseLandmark:
+    x: float
+    y: float
+    z: float
+    visibility: Optional[float] = None
+    presence: Optional[float] = None
+
+    @classmethod
+    def from_landmark(cls, landmark):
+        return cls(
+            x=landmark.x,
+            y=landmark.y,
+            z=landmark.z,
+            visibility=getattr(landmark, "visibility", None),
+            presence=getattr(landmark, "presence", None),
+        )
+
+
+@dataclass
 class PoseResult:
     pose_landmarks: Optional[list[NormalizedPoseLandmark]]
+    world_pose_landmarks: Optional[list[WorldPoseLandmark]] = None
 
 
 class PoseDetector:
@@ -154,12 +174,21 @@ class PoseDetector:
         if self._backend == "solutions":
             result = self._detector.process(image_rgb)
             if not result.pose_landmarks:
-                return PoseResult(pose_landmarks=None)
+                return PoseResult(pose_landmarks=None, world_pose_landmarks=None)
+
+            world_pose_landmarks = None
+            if getattr(result, "pose_world_landmarks", None):
+                world_pose_landmarks = [
+                    WorldPoseLandmark.from_landmark(landmark)
+                    for landmark in result.pose_world_landmarks.landmark
+                ]
+
             return PoseResult(
                 pose_landmarks=[
                     NormalizedPoseLandmark.from_landmark(landmark)
                     for landmark in result.pose_landmarks.landmark
-                ]
+                ],
+                world_pose_landmarks=world_pose_landmarks,
             )
 
         if timestamp_ms is None:
@@ -168,12 +197,21 @@ class PoseDetector:
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
         result = self._detector.detect_for_video(mp_image, timestamp_ms)
         if not result.pose_landmarks:
-            return PoseResult(pose_landmarks=None)
+            return PoseResult(pose_landmarks=None, world_pose_landmarks=None)
+
+        world_pose_landmarks = None
+        if getattr(result, "pose_world_landmarks", None):
+            world_pose_landmarks = [
+                WorldPoseLandmark.from_landmark(landmark)
+                for landmark in result.pose_world_landmarks[0]
+            ]
+
         return PoseResult(
             pose_landmarks=[
                 NormalizedPoseLandmark.from_landmark(landmark)
                 for landmark in result.pose_landmarks[0]
-            ]
+            ],
+            world_pose_landmarks=world_pose_landmarks,
         )
 
     def close(self):
@@ -221,7 +259,14 @@ def download_default_pose_model(destination_path):
     return str(destination_path)
 
 
-def draw_pose_landmarks(image, landmarks, color=(255, 255, 255), thickness=2):
+def draw_pose_landmarks(
+    image,
+    landmarks,
+    color=(255, 255, 255),
+    thickness=2,
+    visibility_threshold=VISIBILITY_THRESHOLD,
+    presence_threshold=PRESENCE_THRESHOLD,
+):
     if not landmarks:
         return
 
@@ -230,9 +275,9 @@ def draw_pose_landmarks(image, landmarks, color=(255, 255, 255), thickness=2):
     for idx, landmark in enumerate(landmarks):
         visibility = getattr(landmark, "visibility", None)
         presence = getattr(landmark, "presence", None)
-        if visibility is not None and visibility < VISIBILITY_THRESHOLD:
+        if visibility is not None and visibility < visibility_threshold:
             continue
-        if presence is not None and presence < PRESENCE_THRESHOLD:
+        if presence is not None and presence < presence_threshold:
             continue
         if not (0.0 <= landmark.x <= 1.0 and 0.0 <= landmark.y <= 1.0):
             continue
